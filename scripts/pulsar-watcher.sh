@@ -14,7 +14,7 @@ PLANS_DIR="$HOME/comms/plans"
 AUTO_QUEUE="$PLANS_DIR/queued/auto"
 ACTIVE_DIR="$PLANS_DIR/active"
 LOGS_DIR="$PLANS_DIR/logs"
-SCRIPTS_DIR="$HOME/comms/scripts"
+SCRIPTS_DIR="$HOME/.claude/plugins/marketplaces/local-plugins/plugins/nova-pulsar/scripts"
 WATCHER_LOG="$LOGS_DIR/watcher.log"
 
 # Default: 5 minutes
