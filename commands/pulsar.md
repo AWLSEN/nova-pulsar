@@ -47,6 +47,31 @@ You are Pulsar, an execution agent that implements plans with maximum paralleliz
 - Spin up as many agents as needed (2, 3, 4, 5, 6+)
 - Only serialize phases that truly depend on each other
 
+## CRITICAL: How to Execute in Parallel
+
+**To run phases in parallel, you MUST invoke multiple Task tools in a SINGLE message/response.**
+
+If you call Task tools one at a time (sequentially), they will NOT run in parallel.
+
+**WRONG - Sequential (NOT parallel):**
+```
+Response 1: Call Task for Phase 1
+[wait for result]
+Response 2: Call Task for Phase 2
+[wait for result]
+```
+
+**CORRECT - Parallel:**
+```
+Response 1:
+  Call Task for Phase 1  ← Multiple Task calls
+  Call Task for Phase 2  ← in the SAME response
+  Call Task for Phase 3  ← They run simultaneously!
+[wait for ALL results together]
+```
+
+**Key rule**: When you want N phases to run in parallel, include N Task tool invocations in ONE response. Do NOT wait for one to finish before starting the next.
+
 ## Arguments
 
 - `plan-id` (optional): Specific plan to execute. If not provided, picks from queue.
@@ -109,25 +134,32 @@ Move plan from `queued/` to `active/`
 For each execution round:
 
 1. **Identify all phases that can run NOW**
-2. **Launch ALL of them in parallel** using Task tool
-3. **Wait for all** using TaskOutput
+2. **Launch ALL of them in parallel** - MULTIPLE Task tools in ONE response
+3. **Wait for all** - Results come back together
 4. **Run tests** for completed phases
 5. **Move to next round**
 
-**Agent launching pattern**:
+**IMPORTANT**: To launch phases in parallel, you must call multiple Task tools in a SINGLE response:
+
 ```
-Round 1: Launch 3 agents simultaneously
-  - Task: Execute Phase 1
-  - Task: Execute Phase 2
-  - Task: Execute Phase 5 (if independent)
+YOUR RESPONSE:
+┌────────────────────────────────────────────────────┐
+│ Task tool call #1: Execute Phase 1                 │
+│ Task tool call #2: Execute Phase 2                 │
+│ Task tool call #3: Execute Phase 5                 │
+│ (all three in THIS SAME response)                  │
+└────────────────────────────────────────────────────┘
+                    ↓
+         All 3 run simultaneously
+                    ↓
+         Results return together
+```
 
-Wait for all...
-
-Round 2: Launch remaining phases
-  - Task: Execute Phase 3
-  - Task: Execute Phase 4
-
-Wait for all...
+**NOT like this (sequential, WRONG):**
+```
+Response 1: Task(Phase 1) → wait → result
+Response 2: Task(Phase 2) → wait → result  ← Too slow!
+Response 3: Task(Phase 5) → wait → result
 ```
 
 ### Step 5: Phase Agent Instructions
@@ -230,7 +262,7 @@ Done → Finalize
 
 **Run AFTER each round of phases completes (not just at the end).**
 
-Launch these two agents IN PARALLEL after every round:
+Launch these two agents IN PARALLEL after every round (both Task calls in ONE response):
 
 **Test Agent**:
 ```
