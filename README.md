@@ -13,15 +13,21 @@ Nova-Pulsar is a Claude Code plugin that separates planning from execution:
 
 ## Installation
 
-### Step 1: Install the Plugin
+### Step 1: Add the Marketplace
 
 In Claude Code, run:
 
 ```
-/plugin install AWLSEN/nova-pulsar
+/plugin marketplace add AWLSEN/nova-pulsar
 ```
 
-### Step 2: Run Setup Script
+### Step 2: Install the Plugin
+
+```
+/plugin install nova-pulsar@awlsen-plugins
+```
+
+### Step 3: Run Setup Script
 
 After installing the plugin, run the setup script to create the required folder structure:
 
@@ -183,10 +189,11 @@ systemctl --user enable --now pulsar-watcher
 
 ## Quick Start
 
-1. Install: `/plugin install AWLSEN/nova-pulsar`
-2. Setup: `~/.claude/plugins/AWLSEN/nova-pulsar/scripts/setup.sh`
-3. Plan: `/nova`
-4. Execute: `/pulsar`
+1. Add marketplace: `/plugin marketplace add AWLSEN/nova-pulsar`
+2. Install plugin: `/plugin install nova-pulsar@awlsen-plugins`
+3. Run setup: `~/.claude/plugins/awlsen-plugins/nova-pulsar/scripts/setup.sh`
+4. Create a plan: `/nova`
+5. Execute: `/pulsar`
 
 ## License
 
