@@ -11,6 +11,40 @@ Nova-Pulsar is a Claude Code plugin that separates planning from execution:
 - **Orbiter** - Background scheduler that intelligently picks which plan to execute next
 - **Archive** (`/archive`) - Archives completed or cancelled plans
 
+## Installation
+
+### Step 1: Install the Plugin
+
+In Claude Code, run:
+
+```
+/plugin install AWLSEN/nova-pulsar
+```
+
+### Step 2: Run Setup Script
+
+After installing the plugin, run the setup script to create the required folder structure:
+
+```bash
+# Basic setup (folders only)
+~/.claude/plugins/AWLSEN/nova-pulsar/scripts/setup.sh
+
+# With auto-execution systemd service
+~/.claude/plugins/AWLSEN/nova-pulsar/scripts/setup.sh --with-systemd
+```
+
+### Manual Setup (Alternative)
+
+If you prefer to set up manually:
+
+```bash
+# Create folder structure
+mkdir -p ~/comms/plans/{queued/auto,queued/manual,active,review,archived,logs}
+
+# Initialize board.json
+echo '[]' > ~/comms/plans/board.json
+```
+
 ## Commands
 
 ### `/nova` - Create a Plan
@@ -86,19 +120,73 @@ Finalize → Move to review
 Move plan to archived/
 ```
 
-## Auto-Execution
+## Auto-Execution (Optional)
 
-For background execution, use the watcher daemon:
+For background execution of plans in `queued/auto/`, use the watcher daemon.
+
+### Using systemd (Recommended)
+
+If you ran setup with `--with-systemd`:
 
 ```bash
-# Start watcher (polls every 5 minutes)
+# Start the watcher
 systemctl --user start pulsar-watcher
 
-# Or run manually
-~/.claude/plugins/marketplaces/local-plugins/plugins/nova-pulsar/scripts/pulsar-watcher.sh &
+# Check status
+systemctl --user status pulsar-watcher
 
-# Plans in queued/auto/ will be picked up automatically
+# View logs
+journalctl --user -u pulsar-watcher -f
+
+# Stop the watcher
+systemctl --user stop pulsar-watcher
 ```
+
+### Manual systemd Setup
+
+Create `~/.config/systemd/user/pulsar-watcher.service`:
+
+```ini
+[Unit]
+Description=Pulsar Plan Watcher - Auto-executes queued plans
+After=default.target
+
+[Service]
+Type=simple
+ExecStart=%h/.claude/plugins/AWLSEN/nova-pulsar/scripts/pulsar-watcher.sh
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=default.target
+```
+
+Then enable and start:
+
+```bash
+systemctl --user daemon-reload
+systemctl --user enable --now pulsar-watcher
+```
+
+### Running Manually
+
+```bash
+# Run in background
+~/.claude/plugins/AWLSEN/nova-pulsar/scripts/pulsar-watcher.sh &
+
+# Run once (for cron jobs)
+~/.claude/plugins/AWLSEN/nova-pulsar/scripts/pulsar-watcher.sh --once
+
+# Custom interval (in seconds, default is 300 = 5 min)
+~/.claude/plugins/AWLSEN/nova-pulsar/scripts/pulsar-watcher.sh --interval 60
+```
+
+## Quick Start
+
+1. Install: `/plugin install AWLSEN/nova-pulsar`
+2. Setup: `~/.claude/plugins/AWLSEN/nova-pulsar/scripts/setup.sh`
+3. Plan: `/nova`
+4. Execute: `/pulsar`
 
 ## License
 
