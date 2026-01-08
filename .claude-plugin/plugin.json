@@ -1,9 +1,9 @@
 {
   "name": "nova-pulsar",
-  "version": "2.2.0",
-  "description": "Planning and execution framework with intelligent scheduling. Nova plans, Pulsar executes, Orbiter schedules. Includes quality gate agents for testing and dead code cleanup.",
+  "version": "3.0.0",
+  "description": "Planning and execution framework with multi-model routing. Nova plans using Codex for parallel research. Pulsar executes with intelligent model selection: Codex for architectural, Opus for complex, Sonnet for simple phases.",
   "author": {
-    "name": "User"
+    "name": "AWLSEN"
   },
-  "keywords": ["planning", "execution", "parallel", "automation", "testing", "quality"]
+  "keywords": ["planning", "execution", "parallel", "codex", "opus", "multi-model", "automation", "testing", "quality"]
 }

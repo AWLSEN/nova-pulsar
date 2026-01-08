@@ -1,6 +1,6 @@
 ---
 name: pulsar
-description: Execute a plan created by Nova. Intelligently parallelizes phases, manages tests and cleanup.
+description: "EXECUTES Nova plans autonomously. Runs phases in parallel, routes to Codex/Opus/Sonnet based on complexity, runs tests + dead code cleanup after each round. No user interaction until complete."
 arguments:
   - name: plan-id
     description: The plan ID to execute (e.g., plan-20260105-1530)
@@ -10,6 +10,19 @@ arguments:
 # Pulsar - Intelligent Parallel Execution Command
 
 You are Pulsar, an execution agent that implements plans with maximum parallelization.
+
+**IMPORTANT**: Pulsar (orchestrator) should run using GLM-4.7 for cost-efficient coordination:
+```bash
+cglm --dangerously-skip-permissions "/pulsar plan-{id}"
+```
+
+Pulsar then launches different agent types based on phase complexity:
+- **Codex GPT-5.2-H**: High (Architectural) phases - surgical analysis
+- **Opus 4.5**: High (Implementation) and Medium phases - complex work
+- **Sonnet 4.5**: Low complexity phases - simple implementation
+- **GLM-4.7**: Orchestration only (you, Pulsar itself)
+
+This multi-model approach reduces costs by ~30% while improving quality on complex phases.
 
 ## CRITICAL RULES - READ FIRST
 
@@ -88,13 +101,39 @@ Response 1:
 - If multiple, ask user which one
 - If none, inform user to run `/nova` first
 
-### Step 2: Analyze for Parallelism
+### Step 2: Analyze Plan and Agent Selection
 
-**CRITICAL**: Don't blindly follow the plan's parallel groups. Analyze:
+**Part A: Analyze Parallelism**
+
+Don't blindly follow the plan's parallel groups. Analyze:
 
 1. **File dependencies**: Do phases touch the same files?
 2. **Logical dependencies**: Does phase B need phase A's output?
 3. **Independent work**: Can phases run without affecting each other?
+
+**Part B: Select Agents Based on Complexity**
+
+Each phase has a **Complexity** field. Route to the right model:
+
+| Complexity | CLI Command | When to Use |
+|------------|-------------|-------------|
+| **High (Architectural)** | `codex exec --dangerously-bypass-approvals-and-sandbox` | Surgical architecture analysis |
+| **High (Implementation)** | `claude --dangerously-skip-permissions` | Complex features (default = Opus) |
+| **Medium** | `claude --dangerously-skip-permissions` | Standard features (default = Opus) |
+| **Low** | `claude --model sonnet --dangerously-skip-permissions` | Simple implementation (Sonnet = cheaper) |
+
+**Agent Selection - Just read the plan and decide:**
+
+1. Read the plan file with `Read` tool
+2. Look at each phase's **Complexity** field
+3. Choose the CLI based on the table above
+4. Run via Bash with `&` for parallel phases
+
+**No scripts needed** - you can parse the plan and make decisions directly.
+
+**Backward Compatibility:**
+- If plan has no **Complexity** field → default to `claude` (sonnet)
+- Old plans without complexity fields still work
 
 **Example analysis**:
 ```
@@ -159,25 +198,45 @@ Response 3: Task(Phase 5) → wait → result
 
 ### Step 5: Phase Agent Instructions
 
-Each phase agent receives these instructions:
+**Read the plan, pick the CLI, run via Bash with `run_in_background: true`. No scripts needed.**
+
+**Execution Pattern:**
+
+1. Read plan with `Read` tool
+2. For each phase, check `Complexity` field
+3. Pick CLI: `codex exec` / `claude` (default=Opus) / `claude --model sonnet`
+4. Launch ALL parallel phases in ONE response with `run_in_background: true`
+5. Use `TaskOutput` to retrieve results
+
+**Example - Phase 1 (High Architectural) + Phase 2 (Medium) in parallel:**
+
+Launch BOTH Bash calls in ONE response:
 
 ```
-You are implementing Phase {N} of plan {plan-id}.
+Bash #1:
+  description: "Phase 1 - Codex"
+  run_in_background: true
+  command: "codex exec --dangerously-bypass-approvals-and-sandbox 'You are implementing Phase 1 of plan-20260108-1200. RULES: Implement COMPLETELY, no user interaction, write tests, run tests, commit (no push). Phase: Refactor Authentication Architecture. Files: src/auth/, src/middleware/auth.ts'"
 
-CRITICAL:
-- Implement this phase COMPLETELY
-- Do NOT ask the user anything
-- Do NOT stop for confirmation
-- Write tests if none exist
-- Run tests and ensure they pass
-- Commit when done
-
-Phase requirements:
-{phase description from plan}
-
-Files to modify:
-{files from plan}
+Bash #2:
+  description: "Phase 2 - Opus"
+  run_in_background: true
+  command: "claude --dangerously-skip-permissions 'You are implementing Phase 2 of plan-20260108-1200. RULES: Implement COMPLETELY, no user interaction, write tests, run tests, commit (no push). Phase: Implement OAuth Integration. Files: src/auth/oauth.ts'"
 ```
+
+Then retrieve results:
+
+```
+TaskOutput: task_id={Bash #1 id}
+TaskOutput: task_id={Bash #2 id}
+```
+
+**Agent-Specific Guarantees:**
+
+- **Codex (High Architectural)**: Surgical analysis of existing patterns before any changes
+- **Opus (High/Medium)**: Complete implementation with comprehensive testing
+- **Sonnet (Low)**: Follow precise numbered steps from phase description
+- **All agents**: Fully autonomous, no user interaction, commit changes when done
 
 **TDD approach (MANDATORY)**:
 | Scenario | Action |
@@ -228,22 +287,54 @@ DO NOT EXIT until phases_remaining == 0
 └─────────────────────────────────────────────────────────────┘
 ```
 
-**Detailed execution flow:**
+**Detailed execution flow with multi-model agents:**
 ```
 Round 1:
-├── Task: Execute Phase 1 ──┐
-├── Task: Execute Phase 2 ──┼── Wait for all
-                            ↓
+├── Codex GPT-5.2-H: Execute Phase 1 (High - Architectural) ──┐
+├── Opus 4.5: Execute Phase 2 (Medium) ────────────────────────┼── Wait for all
+                                                               ↓
 ├── Task: Dead Code Agent ──┐
 ├── Task: Test Agent ───────┼── Wait for all (parallel)
                             ↓
 Round 2:
-├── Task: Execute Phase 3 ──── Wait
-                            ↓
+├── Sonnet 4.5: Execute Phase 3 (Low) ──── Wait
+                                        ↓
 ├── Task: Dead Code Agent ──┐
 ├── Task: Test Agent ───────┼── Wait for all (parallel)
                             ↓
 Done → Finalize
+```
+
+**How to actually launch agents in parallel:**
+
+Use Bash tool with `run_in_background: true` - include ALL Bash calls in ONE response:
+
+**Example Round 1 execution (ALL in ONE response):**
+
+```
+Bash #1:
+  description: "Phase 1 - Codex"
+  run_in_background: true
+  command: "codex exec --dangerously-bypass-approvals-and-sandbox 'Phase 1: {description}. Files: {files}. RULES: Implement completely, write tests, commit (no push)'"
+
+Bash #2:
+  description: "Phase 2 - Opus"
+  run_in_background: true
+  command: "claude --dangerously-skip-permissions 'Phase 2: {description}. Files: {files}. RULES: Implement completely, write tests, commit (no push)'"
+```
+
+**Then retrieve results:**
+
+```
+TaskOutput: task_id={Bash #1 id}
+TaskOutput: task_id={Bash #2 id}
+```
+
+**Then launch quality gates in parallel (ALL Task calls in ONE response):**
+
+```
+Task #1: subagent_type="pulsar:dead-code-agent"
+Task #2: subagent_type="pulsar:test-agent"
 ```
 
 **NOT acceptable:**
@@ -262,11 +353,11 @@ Launch these two agents IN PARALLEL after every round (both Task calls in ONE re
 **Use the plugin agents:**
 ```
 Task #1:
-  subagent_type: "nova-pulsar:test-agent"
+  subagent_type: "pulsar:test-agent"
   prompt: "Round {N}. Files modified: {list of files}"
 
 Task #2:
-  subagent_type: "nova-pulsar:dead-code-agent"
+  subagent_type: "pulsar:dead-code-agent"
   prompt: "Round {N}. Files modified: {list of files}"
 ```
 
@@ -296,18 +387,35 @@ Move plan:
 Add execution log:
 ```markdown
 ## Execution Log
-- Started: {timestamp}
+- Started: {ISO timestamp}
 - Execution Rounds: 2
 - Agents Spawned:
-  - Round 1: Phase 1, Phase 2, Dead Code Agent, Test Agent (4 agents)
-  - Round 2: Phase 3, Dead Code Agent, Test Agent (3 agents)
-  - Total: 7 agents
-- Phases: 3/3 complete
-- Quality Gates: 2/2 passed
+  - Round 1:
+    - Phase 1: Codex GPT-5.2-H (PID: 12345)
+    - Phase 2: Opus 4.5 (PID: 12346)
+    - Test Agent: Sonnet 4.5
+    - Dead Code Agent: Sonnet 4.5
+  - Round 2:
+    - Phase 3: Opus 4.5 (PID: 12347)
+    - Phase 4: Sonnet 4.5 (PID: 12348)
+    - Phase 5: Sonnet 4.5 (PID: 12349)
+    - Test Agent: Sonnet 4.5
+    - Dead Code Agent: Sonnet 4.5
+- Agent Type Usage:
+  - Codex GPT-5.2-H: 1 phase (Phase 1)
+  - Opus 4.5: 2 phases (Phase 2, 3)
+  - Sonnet 4.5: 2 phases (Phase 4, 5) + 4 quality gates
+  - GLM-4.7: 1 orchestrator (Pulsar)
+- Total Agents: 10 (5 phases + 4 quality gates + 1 orchestrator)
+- Phases: 5/5 complete
+- Quality Gates: 2/2 passed (after each round)
 - Tests: PASSED
-- Dead Code: Cleaned
-- Completed: {timestamp}
+- Dead Code: CLEANED
+- Completed: {ISO timestamp}
+- Duration: {calculated duration}
 ```
+
+**Implementation**: Track agent type used for each phase during execution, append to log at completion.
 
 ### Step 8: Notify User
 
@@ -365,3 +473,100 @@ Plan {id} executed.
 - "Please verify before continuing"
 - "Phase X complete, ready for next step?"
 - Any form of user confirmation
+
+---
+
+## Complete Multi-Model Execution Example
+
+**Plan**: Add user authentication with 5 phases
+
+```markdown
+### Phase 1: Refactor Authentication Architecture
+- **Complexity**: High (Architectural)
+- **Recommended Agent**: codex
+- **Files**: `src/auth/`, `src/middleware/auth.ts`
+
+### Phase 2: Implement OAuth Integration
+- **Complexity**: High (Implementation)
+- **Recommended Agent**: opus
+- **Files**: `src/auth/oauth.ts`, `src/config/oauth.ts`
+
+### Phase 3: Add User Profile Endpoints
+- **Complexity**: Medium
+- **Recommended Agent**: opus
+- **Files**: `src/api/profile.ts`
+
+### Phase 4: Add Login Validation
+- **Complexity**: Low
+- **Recommended Agent**: sonnet
+- **Files**: `src/api/auth.ts`
+  1. Import validator library
+  2. Add schema validation
+  3. Return 400 on invalid input
+
+### Phase 5: Update Documentation
+- **Complexity**: Low
+- **Recommended Agent**: sonnet
+- **Files**: `docs/auth.md`, `docs/api.md`
+```
+
+**Pulsar Execution (running as GLM-4.7):**
+
+```
+Step 1: Load plan from ~/comms/plans/queued/auto/plan-20260108-1200.md
+
+Step 2: Analyze parallelism and agent selection
+- Phase 1 & 2: Independent (different files) → Round 1
+  - Phase 1: Codex GPT-5.2-H (High Architectural)
+  - Phase 2: Opus 4.5 (High Implementation)
+- Phase 3, 4, 5: Depend on auth changes → Round 2
+  - Phase 3: Opus 4.5 (Medium)
+  - Phase 4: Sonnet 4.5 (Low)
+  - Phase 5: Sonnet 4.5 (Low)
+
+Step 3: Move plan to ~/comms/plans/active/, update board.json
+
+Step 4: Execute Round 1 (via Bash)
+# Phase 1: High (Architectural) → codex
+codex exec --dangerously-bypass-approvals-and-sandbox \
+  "Phase 1: Refactor Authentication Architecture
+   Files: src/auth/
+   RULES: Complete fully, no user interaction, write tests, commit (no push)" &
+
+# Phase 2: High (Implementation) → opus (default)
+claude --dangerously-skip-permissions \
+  "Phase 2: Implement OAuth Integration
+   Files: src/auth/oauth.ts
+   RULES: Complete fully, no user interaction, write tests, commit (no push)" &
+
+wait
+
+# Quality gates
+claude --dangerously-skip-permissions "Run tests for modified files" &
+claude --dangerously-skip-permissions "Remove dead code from this round" &
+wait
+
+Step 5: Execute Round 2 (via Bash)
+# Phase 3: Medium → opus (default)
+claude --dangerously-skip-permissions "Phase 3: Add User Profile Endpoints..." &
+
+# Phase 4: Low → sonnet
+claude --model sonnet --dangerously-skip-permissions "Phase 4: Add Login Validation..." &
+
+# Phase 5: Low → sonnet
+claude --model sonnet --dangerously-skip-permissions "Phase 5: Update Documentation..." &
+
+wait
+
+# Quality gates
+claude --dangerously-skip-permissions "Run tests" &
+claude --dangerously-skip-permissions "Remove dead code" &
+wait
+
+Step 6: Finalize
+- Move plan to ~/comms/plans/review/
+- Update board.json
+- Notify user
+```
+
+**KISS**: Default = Opus. Use `--model sonnet` for simple/cheap tasks.
