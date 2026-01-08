@@ -55,13 +55,13 @@ This is optional - standard `claude` works fine, just costs more for orchestrati
 In Claude Code, run:
 
 ```
-/marketplace add github:AWLSEN/nova-pulsar
+/plugin marketplace add AWLSEN/nova-pulsar
 ```
 
 ### Step 2: Install the Plugin
 
 ```
-/install nova-pulsar
+/plugin install nova-pulsar@awlsen-plugins
 ```
 
 ### Step 3: Create Folder Structure
@@ -184,8 +184,8 @@ Move plan to archived/
 ## Quick Start
 
 1. Install Codex: `npm install -g @openai/codex`
-2. Add marketplace: `/marketplace add github:AWLSEN/nova-pulsar`
-3. Install plugin: `/install nova-pulsar`
+2. Add marketplace: `/plugin marketplace add AWLSEN/nova-pulsar`
+3. Install plugin: `/plugin install nova-pulsar@awlsen-plugins`
 4. Create folders: `mkdir -p ~/comms/plans/{queued/auto,queued/manual,active,review,archived,logs}`
 5. Create a plan: `/nova`
 6. Execute: `/pulsar`

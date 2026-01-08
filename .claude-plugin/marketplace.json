@@ -7,8 +7,8 @@
     {
       "name": "nova-pulsar",
       "source": "./",
-      "description": "Planning and execution framework with intelligent scheduling. Nova plans, Pulsar executes.",
-      "version": "2.2.0"
+      "description": "Planning and execution framework with multi-model routing. Nova plans using Codex, Pulsar executes with Codex/Opus/Sonnet.",
+      "version": "3.0.0"
     }
   ]
 }
