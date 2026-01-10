@@ -1,0 +1,27 @@
+{
+  "description": "Neutron status tracking hooks for Pulsar background agents",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ${CLAUDE_PLUGIN_ROOT}/hooks/update-status.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "NEUTRON_HOOK_EVENT=stop bash ${CLAUDE_PLUGIN_ROOT}/hooks/update-status.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

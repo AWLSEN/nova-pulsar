@@ -89,6 +89,44 @@ Response 1:
 
 - `plan-id` (optional): Specific plan to execute. If not provided, picks from queue.
 
+## Key Paths (MEMORIZE THESE)
+
+| What | Location | Example |
+|------|----------|---------|
+| **Phase status files** | `~/comms/status/{NEUTRON_TASK_ID}.status` | `~/comms/status/phase-1-plan-20260110-1430.status` |
+| **Alt status location** | `{plan-dir}/phase-{N}.status` | `~/comms/plans/active/phase-1.status` |
+| Queued plans (auto) | `~/comms/plans/queued/auto/` | `plan-20260110-1430.md` |
+| Queued plans (manual) | `~/comms/plans/queued/manual/` | `plan-20260110-1430.md` |
+| Active plans | `~/comms/plans/active/` | Moving during execution |
+| Plan board | `~/comms/plans/board.json` | Status tracking |
+
+## How to Check Phase Status
+
+**ALWAYS check status files, NOT TaskOutput, to determine phase state.**
+
+### Status File Locations (check BOTH)
+
+Status files can be in either location - check both:
+
+1. **Root status directory**: `~/comms/status/phase-{N}-{plan-id}.status`
+2. **Plan directory**: `{plan-dir}/phase-{N}.status` (same dir as the plan file)
+
+```bash
+# Check both locations (use whichever exists)
+cat ~/comms/status/phase-{N}-{plan-id}.status 2>/dev/null || \
+cat {plan-dir}/phase-{N}.status 2>/dev/null
+```
+
+### Decision Logic
+
+| status field | updated_at | Meaning | Action |
+|--------------|------------|---------|--------|
+| `"completed"` | any | Phase finished | Use TaskOutput to get final result |
+| `"running"` | < 5 min ago | Still working | Wait, check again later |
+| `"running"` | > 5 min ago | Likely stuck | Kill and retry or skip |
+
+**CRITICAL**: A phase with `status: "completed"` is DONE. Do NOT interpret stale `updated_at` as stuck if status is completed.
+
 ## Workflow
 
 ### Step 1: Load Plan
@@ -202,11 +240,19 @@ Response 3: Task(Phase 5) → wait → result
 
 **Execution Pattern:**
 
-1. Read plan with `Read` tool
+1. Read plan with `Read` tool - **remember the plan path** (e.g., `~/comms/plans/active/plan-20260110-1430.md`)
 2. For each phase, check `Complexity` field
 3. Pick CLI: `codex exec` / `claude` (default=Opus) / `claude --model sonnet`
 4. Launch ALL parallel phases in ONE response with `run_in_background: true`
-5. Use `TaskOutput` to retrieve results
+   - Prefix command with: `NEUTRON_TASK_ID=phase-{N}-{plan-id}`
+5. **Check status files** to monitor phase completion (NOT TaskOutput):
+   - Check: `~/comms/status/phase-{N}-{plan-id}.status`
+   - Also check: `{plan-dir}/phase-{N}.status` (same dir as plan file)
+   - Look at `status` field:
+     - `"completed"` → Phase done, proceed to TaskOutput for final result
+     - `"running"` + recent `updated_at` → Still working, wait
+     - `"running"` + stale `updated_at` (> 5 min) → Stuck, kill/retry
+6. Use `TaskOutput` only AFTER status file shows `"completed"`
 
 **Example - Phase 1 (High Architectural) + Phase 2 (Medium) in parallel:**
 
@@ -216,15 +262,31 @@ Launch BOTH Bash calls in ONE response:
 Bash #1:
   description: "Phase 1 - Codex"
   run_in_background: true
-  command: "codex exec --dangerously-bypass-approvals-and-sandbox 'You are implementing Phase 1 of plan-20260108-1200. RULES: Implement COMPLETELY, no user interaction, write tests, run tests, commit (no push). Phase: Refactor Authentication Architecture. Files: src/auth/, src/middleware/auth.ts'"
+  command: "NEUTRON_TASK_ID=phase-1-plan-20260108-1200 codex exec --dangerously-bypass-approvals-and-sandbox 'Phase 1: Refactor Authentication Architecture. Files: src/auth/. RULES: Implement COMPLETELY, no user interaction, write tests, commit (no push).'"
 
 Bash #2:
   description: "Phase 2 - Opus"
   run_in_background: true
-  command: "claude --dangerously-skip-permissions 'You are implementing Phase 2 of plan-20260108-1200. RULES: Implement COMPLETELY, no user interaction, write tests, run tests, commit (no push). Phase: Implement OAuth Integration. Files: src/auth/oauth.ts'"
+  command: "NEUTRON_TASK_ID=phase-2-plan-20260108-1200 claude --dangerously-skip-permissions 'Phase 2: Implement OAuth Integration. Files: src/auth/oauth.ts. RULES: Implement COMPLETELY, no user interaction, write tests, commit (no push).'"
 ```
 
-Then retrieve results:
+Then **check status files** to see when phases complete:
+
+```bash
+# Check status files (check BOTH locations)
+cat ~/comms/status/phase-1-plan-20260108-1200.status
+cat ~/comms/status/phase-2-plan-20260108-1200.status
+# OR check plan directory
+cat ~/comms/plans/active/phase-1.status
+cat ~/comms/plans/active/phase-2.status
+```
+
+**Interpreting status:**
+- `"status": "completed"` → Phase is DONE, get final result via TaskOutput
+- `"status": "running"` + recent `updated_at` → Still working, wait
+- `"status": "running"` + stale `updated_at` (> 5 min) → Stuck
+
+**Only after status shows "completed"**, retrieve final results:
 
 ```
 TaskOutput: task_id={Bash #1 id}
@@ -473,6 +535,98 @@ Plan {id} executed.
 - "Please verify before continuing"
 - "Phase X complete, ready for next step?"
 - Any form of user confirmation
+
+## Detecting and Handling Stuck Phases
+
+When background phases are launched, they create status files via the Neutron hook. **If you suspect a phase is stuck or unresponsive**, use these files to diagnose the issue.
+
+### Status File Location
+
+All phase status files are written to:
+```
+~/comms/status/phase-{N}-{plan-id}.status
+```
+
+For example, for plan `plan-20260110-1430`:
+- Phase 1: `~/comms/status/phase-1-plan-20260110-1430.status`
+- Phase 2: `~/comms/status/phase-2-plan-20260110-1430.status`
+- Phase 3: `~/comms/status/phase-3-plan-20260110-1430.status`
+
+### Status File Format
+
+Each status file is JSON with this structure:
+```json
+{
+  "task_id": "phase-1-plan-20260110-1430",
+  "plan_id": "plan-20260110-1430",
+  "phase": 1,
+  "started_at": "2026-01-10T14:30:00Z",
+  "updated_at": "2026-01-10T14:35:22Z",
+  "last_tool": "Edit",
+  "last_file": "/path/to/file.ts",
+  "tool_count": 47,
+  "status": "running"
+}
+```
+
+### How to Check if a Phase is Stuck
+
+**Step 1: Read the status file**
+```bash
+cat ~/comms/status/phase-{N}-{plan-id}.status
+```
+
+**Step 2: Determine if stuck based on these signals:**
+
+| Signal | Indicator of Stuck |
+|--------|-------------------|
+| `updated_at` is > 5 minutes old | Phase may be stuck waiting for input or hung |
+| `tool_count` hasn't changed | Agent is not making progress |
+| Status file doesn't exist | Phase never started or crashed immediately |
+| `last_tool` is "AskUserQuestion" | Agent is incorrectly waiting for user (should NEVER happen) |
+
+**Step 3: Verify the background process**
+```bash
+# Check if the task is still running
+ps aux | grep "phase-{N}-{plan-id}"
+```
+
+### What to Do When a Phase is Stuck
+
+1. **If TaskOutput is blocking and not returning:**
+   - Check the status file at `~/comms/status/phase-{N}-{plan-id}.status`
+   - If `updated_at` is stale (> 5 mins), the phase is likely stuck
+
+2. **If status file shows no progress:**
+   - Kill the stuck background task: `kill <PID>`
+   - Log the failure in the execution log
+   - Continue with remaining independent phases
+
+3. **If an agent is waiting for user input (last_tool = AskUserQuestion):**
+   - This violates the "NO USER INTERACTION" rule
+   - Kill the task and restart with stricter instructions
+
+4. **Recovery pattern:**
+   ```
+   1. TaskOutput with block: false to check without waiting
+   2. Read ~/comms/status/phase-{N}-{plan-id}.status
+   3. If stale, use KillShell on the task
+   4. Mark phase as failed
+   5. Continue with other phases
+   ```
+
+### Proactive Monitoring
+
+While waiting for phases to complete, periodically check status:
+```
+# List all status files for current plan
+ls -la ~/comms/status/phase-*-{plan-id}.status
+
+# Check last update time
+cat ~/comms/status/phase-{N}-{plan-id}.status | jq '.updated_at'
+```
+
+This allows early detection of stuck phases rather than waiting indefinitely.
 
 ---
 
