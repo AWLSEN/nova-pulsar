@@ -10,11 +10,12 @@
 # 2. Calls Orbiter sub-agent to intelligently pick the next plan
 # 3. Triggers execution via pulsar-auto.sh
 
-PLANS_DIR="$HOME/comms/plans"
+# Project-relative paths (run from project root)
+PLANS_DIR="./comms/plans"
 AUTO_QUEUE="$PLANS_DIR/queued/auto"
 ACTIVE_DIR="$PLANS_DIR/active"
 LOGS_DIR="$PLANS_DIR/logs"
-SCRIPTS_DIR="$HOME/.claude/plugins/marketplaces/local-plugins/plugins/nova-pulsar/scripts"
+SCRIPTS_DIR="$HOME/.claude/plugins/marketplaces/local-plugins/scripts"
 WATCHER_LOG="$LOGS_DIR/watcher.log"
 
 # Default: 5 minutes

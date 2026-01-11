@@ -5,12 +5,13 @@
 # Example: ./pulsar-auto.sh plan-20260105-1530
 #
 # This script runs Claude in non-interactive mode to execute a plan.
-# Output is logged to ~/comms/plans/logs/
+# Output is logged to ./comms/plans/logs/ (project-relative)
 
 set -e
 
 PLAN_ID="$1"
-PLANS_DIR="$HOME/comms/plans"
+# Project-relative paths (must run from project root)
+PLANS_DIR="./comms/plans"
 LOGS_DIR="$PLANS_DIR/logs"
 LOG_FILE="$LOGS_DIR/${PLAN_ID}.log"
 

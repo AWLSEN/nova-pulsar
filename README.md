@@ -17,14 +17,13 @@ Nova-Pulsar uses different models for different tasks:
 
 | Task | Model | Why |
 |------|-------|-----|
-| Orchestration | GLM-4.7 (optional) | Cheap coordination |
 | Research (Nova) | Codex | Parallel codebase analysis |
 | High (Architectural) | Codex | Surgical architecture changes |
 | High (Implementation) | Opus | Complex features |
 | Medium | Opus | Standard features |
 | Low | Sonnet | Simple, precise steps |
 
-This multi-model approach reduces costs by ~30% while improving quality.
+This multi-model approach optimizes for quality based on task complexity.
 
 ## Prerequisites
 
@@ -35,18 +34,6 @@ This multi-model approach reduces costs by ~30% while improving quality.
    ```bash
    npm install -g @openai/codex
    ```
-
-### Optional (Cost Savings)
-
-Run Nova/Pulsar with GLM-4.7 as the orchestrator for cheaper coordination:
-
-```bash
-# If you have GLM configured as 'cglm' alias:
-cglm --dangerously-skip-permissions "/nova"
-cglm --dangerously-skip-permissions "/pulsar plan-{id}"
-```
-
-This is optional - standard `claude` works fine, just costs more for orchestration.
 
 ## Installation
 
@@ -64,14 +51,17 @@ In Claude Code, run:
 /plugin install nova-pulsar@awlsen-plugins
 ```
 
-### Step 3: Create Folder Structure
+### Step 3: Create Folder Structure (Per Project)
+
+In each project where you want to use Nova-Pulsar:
 
 ```bash
-# Create folder structure
-mkdir -p ~/comms/plans/{queued/auto,queued/manual,active,review,archived,logs}
+# Create folder structure (run in your project root)
+mkdir -p ./comms/plans/{queued/auto,queued/manual,active,review,archived,logs}
+mkdir -p ./comms/status
 
 # Initialize board.json
-echo '[]' > ~/comms/plans/board.json
+echo '[]' > ./comms/plans/board.json
 ```
 
 Or run the setup script if available:
@@ -131,10 +121,10 @@ Archives a completed or cancelled plan.
 
 ## Folder Structure
 
-Plans are stored in `~/comms/plans/`:
+Plans are stored in `./comms/plans/` (project-relative):
 
 ```
-~/comms/plans/
+./comms/plans/
 ├── board.json          # Central tracking
 ├── queued/
 │   ├── auto/           # Auto-execute plans
@@ -144,6 +134,8 @@ Plans are stored in `~/comms/plans/`:
 ├── archived/           # Done or discarded
 └── logs/               # Execution logs
 ```
+
+**Note:** Each project has its own `./comms/` directory. Plans are project-specific and can be committed to git.
 
 ## Execution Flow
 
@@ -186,7 +178,7 @@ Move plan to archived/
 1. Install Codex: `npm install -g @openai/codex`
 2. Add marketplace: `/plugin marketplace add AWLSEN/nova-pulsar`
 3. Install plugin: `/plugin install nova-pulsar@awlsen-plugins`
-4. Create folders: `mkdir -p ~/comms/plans/{queued/auto,queued/manual,active,review,archived,logs}`
+4. Create folders: `mkdir -p ./comms/plans/{queued/auto,queued/manual,active,review,archived,logs} ./comms/status`
 5. Create a plan: `/nova`
 6. Execute: `/pulsar`
 

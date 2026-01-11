@@ -1,6 +1,6 @@
 #!/bin/bash
 # Neutron Status Update Hook
-# Updates ~/comms/status/{TASK_ID}.status after each tool use
+# Updates ./comms/status/{TASK_ID}.status after each tool use (project-relative)
 #
 # This hook is triggered by PostToolUse events. It reads the tool
 # information from stdin and updates the status file atomically.
@@ -11,6 +11,7 @@
 #   NEUTRON_TASK_ID - Task identifier (e.g., "phase-1-plan-20260110-1430")
 #                     If not set, hook exits silently (not a tracked task)
 #   NEUTRON_HOOK_EVENT - Set to "stop" when called from Stop hook
+#   NEUTRON_PROJECT_DIR - Optional: override project directory (defaults to pwd)
 
 set -euo pipefail
 
@@ -19,8 +20,9 @@ if [[ -z "${NEUTRON_TASK_ID:-}" ]]; then
     exit 0
 fi
 
-# Status file location
-STATUS_DIR="${HOME}/comms/status"
+# Status file location (project-relative, uses working directory)
+PROJECT_DIR="${NEUTRON_PROJECT_DIR:-$(pwd)}"
+STATUS_DIR="${PROJECT_DIR}/comms/status"
 STATUS_FILE="${STATUS_DIR}/${NEUTRON_TASK_ID}.status"
 TMP_FILE="${STATUS_FILE}.tmp"
 
