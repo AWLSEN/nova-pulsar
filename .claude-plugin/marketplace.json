@@ -7,8 +7,8 @@
     {
       "name": "nova-pulsar",
       "source": "./",
-      "description": "Planning and execution framework with multi-model routing. Nova plans using Codex, Pulsar executes with Codex/Opus/Sonnet.",
-      "version": "3.0.0"
+      "description": "Plan first, execute later. Nova plans your tasks, Pulsar builds them with parallel agents.",
+      "version": "3.1.0"
     }
   ]
 }
