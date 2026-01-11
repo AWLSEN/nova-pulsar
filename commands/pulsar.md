@@ -88,6 +88,28 @@ Response 1:
 
 - **plan-id** (optional): Specific plan to execute. If not provided, picks from queue.
 
+## CRITICAL: Path Requirements - NO EXCEPTIONS
+
+**ALL plans and status files MUST use `~/comms/` - NEVER any other path.**
+
+| Resource | Path | Example |
+|----------|------|---------|
+| Plans (queued) | `~/comms/plans/queued/` | `~/comms/plans/queued/auto/plan-20260111-1200.md` |
+| Plans (active) | `~/comms/plans/active/` | `~/comms/plans/active/plan-20260111-1200.md` |
+| Plans (review) | `~/comms/plans/review/` | `~/comms/plans/review/plan-20260111-1200.md` |
+| Status files | `~/comms/status/` | `~/comms/status/phase-1-plan-20260111-1200.status` |
+| Board | `~/comms/plans/board.json` | - |
+
+**NEVER use these paths (they are WRONG):**
+- `./comms/` (project-relative - WRONG)
+- `$(pwd)/comms/` (current directory - WRONG)
+- Any hardcoded absolute path - WRONG
+
+**Why `~/comms/`:**
+- Single source of truth across all projects
+- Hooks write status files here (they use `${HOME}/comms/`)
+- Nova saves plans here - Pulsar MUST read from same location
+
 ## Key Paths (MEMORIZE THESE)
 
 | What | Location | Example |
@@ -243,12 +265,27 @@ Bash #3:
     Co-Authored-By: Pulsar <noreply@anthropic.com>"
 ```
 
-Then retrieve results:
+Then poll status files until all phases complete (DO NOT use TaskOutput - status files are more reliable):
+
+**Poll status files:**
+```bash
+# Check each phase's status file
+cat ~/comms/status/phase-1-plan-20260108-1200.status | jq -r '.status'
+cat ~/comms/status/phase-2-plan-20260108-1200.status | jq -r '.status'
+cat ~/comms/status/phase-3-plan-20260108-1200.status | jq -r '.status'
 ```
-TaskOutput: task_id={Bash #1 id}
-TaskOutput: task_id={Bash #2 id}
-TaskOutput: task_id={Bash #3 id}
-```
+
+**Polling loop:**
+1. Read each phase's status file from `~/comms/status/`
+2. Check `"status"` field:
+   - `"running"` → still working, wait 30 seconds and re-check
+   - `"completed"` → phase done
+3. All phases `"completed"` → proceed to next round
+
+**Why status files over TaskOutput:**
+- Hook-based updates are atomic and reliable
+- Shows real-time progress (tool_count, last_tool, last_file)
+- Stop hook sets `"completed"` immediately when agent finishes
 
 **TDD approach (MANDATORY for all agents):**
 
@@ -461,8 +498,8 @@ cat ~/comms/status/phase-1-plan-20260108-1200.status
 
 | status | updated_at | Action |
 |--------|------------|--------|
-| `"completed"` | any | Done - get result via TaskOutput |
-| `"running"` | < 5 min ago | Still working - wait |
+| `"completed"` | any | Phase done - proceed to next round |
+| `"running"` | < 5 min ago | Still working - wait 30 seconds, re-check |
 | `"running"` | > 10 min stale | Likely stuck - kill and retry |
 | File missing | - | Phase never started or crashed |
 
