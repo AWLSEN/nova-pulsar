@@ -1,186 +1,113 @@
 # Nova-Pulsar
 
-Planning and execution framework for Claude Code with multi-model routing.
+**Plan first, then execute.** A Claude Code plugin that helps you break down complex tasks into plans and execute them with parallel agents.
 
-## Overview
-
-Nova-Pulsar is a Claude Code plugin that separates planning from execution with intelligent model selection:
-
-- **Nova** (`/nova`) - Planning agent that uses Codex for parallel research, asks clarifying questions, and creates structured execution plans
-- **Pulsar** (`/pulsar`) - Execution agent that routes phases to the right model (Codex/Opus/Sonnet) based on complexity
-- **Orbiter** - Background scheduler that intelligently picks which plan to execute next
-- **Archive** (`/archive`) - Archives completed or cancelled plans
-
-## Multi-Model Architecture
-
-Nova-Pulsar uses different models for different tasks:
-
-| Task | Model | Why |
-|------|-------|-----|
-| Research (Nova) | Codex | Parallel codebase analysis |
-| High (Architectural) | Codex | Surgical architecture changes |
-| High (Implementation) | Opus | Complex features |
-| Medium | Opus | Standard features |
-| Low | Sonnet | Simple, precise steps |
-
-This multi-model approach optimizes for quality based on task complexity.
-
-## Prerequisites
-
-### Required
-
-1. **Claude Code** - Install from https://claude.ai/code
-2. **OpenAI Codex CLI** - Required for Nova's research and architectural phases
-   ```bash
-   npm install -g @openai/codex
-   ```
-
-## Installation
-
-### Step 1: Add the Marketplace
-
-In Claude Code, run:
+## What It Does
 
 ```
-/plugin marketplace add AWLSEN/nova-pulsar
+You: "Add user authentication to my app"
+         ↓
+    /nova (plans it)
+         ↓
+    /pulsar (builds it)
+         ↓
+    Done!
 ```
 
-### Step 2: Install the Plugin
+- **Nova** - Researches your codebase, asks questions, creates a step-by-step plan
+- **Pulsar** - Executes the plan using multiple agents in parallel
+- **Rover** - Explores your codebase (read-only) to help you understand it
 
-```
-/plugin install nova-pulsar@awlsen-plugins
-```
+## Quick Start
 
-### Step 3: Create Folder Structure (Per Project)
-
-In each project where you want to use Nova-Pulsar:
+### 1. Install
 
 ```bash
-# Create folder structure (run in your project root)
-mkdir -p ./comms/plans/{queued/auto,queued/manual,active,review,archived,logs}
-mkdir -p ./comms/status
+# In Claude Code, run:
+/plugin marketplace add AWLSEN/nova-pulsar
+/plugin install nova-pulsar@local-plugins
+```
 
-# Initialize board.json
+### 2. Setup Your Project
+
+Run this in your project folder:
+
+```bash
+mkdir -p ./comms/plans/{queued/auto,queued/manual,active,review,archived,logs} ./comms/status
 echo '[]' > ./comms/plans/board.json
 ```
 
-Or run the setup script if available:
+### 3. Use It
 
-```bash
-~/.claude/plugins/cache/*/nova-pulsar/*/scripts/setup.sh
+```
+/nova          # Create a plan (Nova asks questions, you approve)
+/pulsar        # Execute the plan (runs automatically)
+/archive ID    # Archive when done
+```
+
+That's it!
+
+## How It Works
+
+### Step 1: Plan with Nova
+
+```
+You: /nova I want to add a login page
+
+Nova:
+  → Researches your codebase
+  → Asks clarifying questions
+  → Creates a plan with phases
+  → You approve → Plan saved
+```
+
+### Step 2: Execute with Pulsar
+
+```
+You: /pulsar
+
+Pulsar:
+  → Reads the plan
+  → Runs phases in parallel (when possible)
+  → Writes tests
+  → Cleans up dead code
+  → Done!
 ```
 
 ## Commands
 
-### `/nova` - Create a Plan
+| Command | What it does |
+|---------|--------------|
+| `/nova` | Create a new plan |
+| `/pulsar` | Execute a plan |
+| `/pulsar plan-ID` | Execute a specific plan |
+| `/rover` | Explore codebase (read-only) |
+| `/archive plan-ID` | Archive a completed plan |
 
-Nova is a planning-only agent that:
-- Uses Codex for parallel research (multiple Bash commands with `run_in_background: true`)
-- Iterates research until ready to plan
-- Asks clarifying questions using AskUserQuestion
-- Creates structured plans with complexity ratings and parallelization analysis
+## Where Plans Live
 
-**How Nova Works:**
-```
-Nova (orchestrator)
-├── Bash #1: codex exec "find auth files"    → background
-├── Bash #2: codex exec "analyze patterns"   → background
-├── Bash #3: codex exec "find tests"         → background
-└── TaskOutput to retrieve all results
-```
-
-### `/pulsar [plan-id]` - Execute a Plan
-
-Pulsar executes plans with:
-- Multi-model routing based on phase complexity
-- Intelligent parallelization (analyzes dependencies, maximizes parallel execution)
-- Quality gates after each round (Dead Code Agent + Test Agent in parallel)
-- TDD approach (write tests if none exist)
-- Autonomous execution (no user interaction mid-execution)
-
-**How Pulsar Works:**
-```
-Pulsar (orchestrator)
-├── Bash #1: codex exec "Phase 1 - architectural" → background
-├── Bash #2: claude "Phase 2 - medium"            → background
-├── Bash #3: claude --model sonnet "Phase 3"      → background
-└── TaskOutput to retrieve all results
-```
-
-**Model Selection:**
-| Complexity | CLI Command |
-|------------|-------------|
-| High (Architectural) | `codex exec --dangerously-bypass-approvals-and-sandbox` |
-| High (Implementation) | `claude --dangerously-skip-permissions` |
-| Medium | `claude --dangerously-skip-permissions` |
-| Low | `claude --model sonnet --dangerously-skip-permissions` |
-
-### `/archive <plan-id>` - Archive Plan
-
-Archives a completed or cancelled plan.
-
-## Folder Structure
-
-Plans are stored in `./comms/plans/` (project-relative):
+Plans are stored in your project's `./comms/` folder:
 
 ```
-./comms/plans/
-├── board.json          # Central tracking
-├── queued/
-│   ├── auto/           # Auto-execute plans
-│   └── manual/         # Manual trigger plans
-├── active/             # Currently executing
-├── review/             # Completed, awaiting review
-├── archived/           # Done or discarded
-└── logs/               # Execution logs
+./comms/
+├── plans/
+│   ├── queued/auto/    ← Plans waiting to run
+│   ├── queued/manual/  ← Plans you trigger manually
+│   ├── active/         ← Currently running
+│   ├── review/         ← Done, needs your review
+│   └── archived/       ← Finished
+└── status/             ← Progress tracking
 ```
 
-**Note:** Each project has its own `./comms/` directory. Plans are project-specific and can be committed to git.
+## Optional: Codex for Better Research
 
-## Execution Flow
+Nova works best with OpenAI Codex for parallel research:
 
-```
-/nova
-  ↓
-Inner Monologue → Predict questions
-  ↓
-Launch Codex Agents (parallel via Bash + run_in_background)
-  ↓
-Review Reports → Need more? Loop back
-  ↓
-Ask User Questions
-  ↓
-Create Plan with Complexity Ratings
-  ↓
-Save to queued/auto or queued/manual
-
-/pulsar
-  ↓
-Load Plan → Analyze complexity per phase
-  ↓
-Round 1: Phase 1 (Codex) + Phase 2 (Opus) [parallel via Bash]
-  ↓
-Quality Gate: Dead Code + Test Agent (parallel)
-  ↓
-Round 2: Phase 3 (Sonnet)
-  ↓
-Quality Gate: Dead Code + Test Agent (parallel)
-  ↓
-Finalize → Move to review
-
-/archive plan-id
-  ↓
-Move plan to archived/
+```bash
+npm install -g @openai/codex
 ```
 
-## Quick Start
-
-1. Install Codex: `npm install -g @openai/codex`
-2. Add marketplace: `/plugin marketplace add AWLSEN/nova-pulsar`
-3. Install plugin: `/plugin install nova-pulsar@awlsen-plugins`
-4. Create folders: `mkdir -p ./comms/plans/{queued/auto,queued/manual,active,review,archived,logs} ./comms/status`
-5. Create a plan: `/nova`
-6. Execute: `/pulsar`
+Without Codex, Nova falls back to Claude's built-in Explore agent (still works, just slower).
 
 ## License
 
