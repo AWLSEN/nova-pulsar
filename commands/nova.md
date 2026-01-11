@@ -55,20 +55,46 @@ Predicted questions to ask user later:
 - What's the error handling preference?
 ```
 
-**Phase B: Launch Explore Agents (Dynamic)**
+**Phase B: Launch Research Agents (Dynamic)**
 
-Based on your inner monologue, launch AS MANY explore agents as needed IN PARALLEL:
+Based on your inner monologue, launch AS MANY research agents as needed IN PARALLEL.
+
+**Research Agent Routing:**
+
+| Research Type | Command | Use For |
+|---------------|---------|---------|
+| Quick search | `codex exec --dangerously-bypass-approvals-and-sandbox` | Find files, patterns, conventions |
+| Deep analysis | `cglm --dangerously-skip-permissions` | Architecture understanding, complex relationships |
+
+**Launch via Bash with `run_in_background: true` (ALL in ONE response):**
 
 ```
-# Could be 2, 3, 4, 5+ agents depending on complexity
-Task(Explore): "Find where authentication is handled"
-Task(Explore): "What state management pattern is used?"
-Task(Explore): "Find test conventions and existing tests"
-Task(Explore): "What API patterns exist?"
-Task(Explore): "Find related components that might be affected"
+Bash #1:
+  run_in_background: true
+  command: "codex exec --dangerously-bypass-approvals-and-sandbox 'RESEARCH: Find all auth files. RULES: READ ONLY, no git push/commit/rm'"
+
+Bash #2:
+  run_in_background: true
+  command: "codex exec --dangerously-bypass-approvals-and-sandbox 'RESEARCH: Find test conventions. RULES: READ ONLY, no git push/commit/rm'"
+
+Bash #3:
+  run_in_background: true
+  command: "cglm --dangerously-skip-permissions 'RESEARCH: Analyze how auth integrates with the API layer. RULES: READ ONLY, no git push/commit/rm'"
 ```
 
-DO NOT hardcode 2 agents. Launch what's needed based on your predicted questions.
+Then retrieve results:
+```
+TaskOutput: task_id={Bash #1 id}
+TaskOutput: task_id={Bash #2 id}
+TaskOutput: task_id={Bash #3 id}
+```
+
+**Guardrails (include in EVERY research prompt):**
+- READ ONLY - do not modify any files
+- No git push, git commit, rm -rf
+- Only use: Read, Glob, Grep, Bash (for ls, cat, find)
+
+**DO NOT hardcode 2 agents.** Launch what's needed based on your predicted questions.
 
 **Phase C: Review Reports & Decide**
 
@@ -165,14 +191,14 @@ On approval:
 
 ## Complexity Analysis
 
-Each phase MUST have a **Complexity** rating. This tells Pulsar which model to use.
+Each phase MUST have a Complexity rating. This tells Pulsar which model to use.
 
 | Complexity | When to Use | Pulsar Routes To |
 |------------|-------------|------------------|
-| High (Architectural) | Requires analyzing existing architecture, refactoring patterns, surgical changes | Codex |
-| High (Implementation) | Complex features, security-critical, multi-file integration | Opus |
-| Medium | Standard features, business logic, CRUD operations | GLM-4.7 |
-| Low | Simple changes where you can provide exact steps | Sonnet |
+| **High (Architectural)** | Requires analyzing existing architecture, refactoring patterns, surgical changes | Codex |
+| **High (Implementation)** | Complex features, security-critical, multi-file integration | Opus |
+| **Medium** | Standard features, business logic, CRUD operations | GLM-4.7 |
+| **Low** | Simple changes where you can provide exact steps | Sonnet |
 
 **Guidelines:**
 - **High (Architectural)**: Phase needs deep understanding of existing code before changes
@@ -343,20 +369,20 @@ Execution:
 ## Research Best Practices
 
 1. **Think first** - Use inner monologue to predict what you need to know
-2. **Launch dynamically** - 2, 3, 4, 5+ explore agents based on complexity
-3. **Review thoroughly** - Read all agent reports before deciding next step
-4. **Iterate** - If gaps remain, launch more agents or ask user
-5. **Don't rush** - Better to over-research than under-research
+2. **Launch dynamically** - 2, 3, 4, 5+ agents based on complexity
+3. **Route by type** - Codex for quick search, GLM for deep analysis
+4. **Review thoroughly** - Read all agent reports before deciding next step
+5. **Iterate** - If gaps remain, launch more agents or ask user
+6. **Don't rush** - Better to over-research than under-research
 
 **Example for "Add user authentication":**
-
 ```
 Inner Monologue:
-- Where are routes defined? → Explore Agent 1
-- What database/ORM is used? → Explore Agent 2
-- Are there existing auth patterns? → Explore Agent 3
-- What's the session/token strategy? → Explore Agent 4
-- Where are tests located? → Explore Agent 5
-```
+- Where are routes defined? → Codex (quick search)
+- What database/ORM is used? → Codex (quick search)
+- Are there existing auth patterns? → Codex (quick search)
+- How does auth integrate with middleware? → GLM (deep analysis)
+- Where are tests located? → Codex (quick search)
 
-Launch 5 agents in parallel, wait for all, review reports, decide.
+Launch 5 agents in parallel (ALL Bash in ONE response), wait for all, review reports, decide.
+```
