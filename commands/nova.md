@@ -203,7 +203,11 @@ Options:
 
 On approval:
 1. Generate ID: `plan-{YYYYMMDD}-{HHMM}`
-2. Ensure directories exist: `mkdir -p ./comms/plans/queued/auto ./comms/plans/queued/manual`
+2. **Auto-create folders if they don't exist:**
+   ```bash
+   mkdir -p ./comms/plans/queued/auto ./comms/plans/queued/manual ./comms/plans/active ./comms/plans/review ./comms/plans/archived ./comms/plans/logs ./comms/status
+   [ -f ./comms/plans/board.json ] || echo '[]' > ./comms/plans/board.json
+   ```
 3. Save to:
    - Auto: `./comms/plans/queued/auto/{id}.md`
    - Manual: `./comms/plans/queued/manual/{id}.md`

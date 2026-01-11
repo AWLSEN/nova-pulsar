@@ -125,6 +125,12 @@ Response 1:
 
 ### Step 1: Load Plan
 
+**First, ensure folders exist:**
+```bash
+mkdir -p ./comms/plans/queued/auto ./comms/plans/queued/manual ./comms/plans/active ./comms/plans/review ./comms/plans/archived ./comms/plans/logs ./comms/status
+[ -f ./comms/plans/board.json ] || echo '[]' > ./comms/plans/board.json
+```
+
 If plan-id provided:
 - Look in `./comms/plans/queued/auto/` and `./comms/plans/queued/manual/`
 

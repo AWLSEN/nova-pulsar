@@ -5,109 +5,97 @@
 ## What It Does
 
 ```
-You: "Add user authentication to my app"
-         ↓
-    /nova (plans it)
-         ↓
-    /pulsar (builds it)
-         ↓
-    Done!
+You: /nova Add user authentication to my app
+              ↓
+         Nova plans it (asks questions, you approve)
+              ↓
+You: /pulsar
+              ↓
+         Pulsar builds it (runs in parallel)
+              ↓
+         Done!
 ```
 
 - **Nova** - Researches your codebase, asks questions, creates a step-by-step plan
 - **Pulsar** - Executes the plan using multiple agents in parallel
 - **Rover** - Explores your codebase (read-only) to help you understand it
 
-## Quick Start
+## Smart Model Routing
 
-### 1. Install
+We optimize for **cost and performance** by using the right model for each task:
 
-```bash
-# In Claude Code, run:
+| Task Complexity | Model | Why |
+|-----------------|-------|-----|
+| High (Architectural) | Codex | Best for analyzing existing code patterns |
+| High (Implementation) | Opus | Complex features need deep reasoning |
+| Medium | Opus | Standard coding tasks |
+| Low | Sonnet | Fast & cheap for simple changes |
+
+This means simple tasks use Sonnet (cheaper), complex tasks use Opus (smarter).
+
+## Install
+
+```
 /plugin marketplace add AWLSEN/nova-pulsar
 /plugin install nova-pulsar@local-plugins
 ```
 
-### 2. Setup Your Project
+That's it! The `./comms/` folder is created automatically when you first run `/nova`.
 
-Run this in your project folder:
+## How to Use
 
-```bash
-mkdir -p ./comms/plans/{queued/auto,queued/manual,active,review,archived,logs} ./comms/status
-echo '[]' > ./comms/plans/board.json
-```
+### 1. Plan with Nova
 
-### 3. Use It
+Type `/nova` followed by what you want to build:
 
 ```
-/nova          # Create a plan (Nova asks questions, you approve)
-/pulsar        # Execute the plan (runs automatically)
-/archive ID    # Archive when done
+/nova Add a dark mode toggle to the settings page
 ```
 
-That's it!
+Nova will:
+- Research your codebase
+- Ask clarifying questions
+- Show you a plan
+- Save it when you approve
 
-## How It Works
-
-### Step 1: Plan with Nova
-
-```
-You: /nova I want to add a login page
-
-Nova:
-  → Researches your codebase
-  → Asks clarifying questions
-  → Creates a plan with phases
-  → You approve → Plan saved
-```
-
-### Step 2: Execute with Pulsar
+### 2. Execute with Pulsar
 
 ```
-You: /pulsar
+/pulsar
+```
 
-Pulsar:
-  → Reads the plan
-  → Runs phases in parallel (when possible)
-  → Writes tests
-  → Cleans up dead code
-  → Done!
+Pulsar will:
+- Read the plan
+- Run phases in parallel (when possible)
+- Write tests automatically
+- Clean up dead code
+- Notify you when done
+
+### 3. Archive when finished
+
+```
+/archive plan-20260111-1530
 ```
 
 ## Commands
 
 | Command | What it does |
 |---------|--------------|
-| `/nova` | Create a new plan |
-| `/pulsar` | Execute a plan |
-| `/pulsar plan-ID` | Execute a specific plan |
+| `/nova <description>` | Create a plan for your task |
+| `/pulsar` | Execute the latest plan |
+| `/pulsar <plan-id>` | Execute a specific plan |
 | `/rover` | Explore codebase (read-only) |
-| `/archive plan-ID` | Archive a completed plan |
-
-## Where Plans Live
-
-Plans are stored in your project's `./comms/` folder:
-
-```
-./comms/
-├── plans/
-│   ├── queued/auto/    ← Plans waiting to run
-│   ├── queued/manual/  ← Plans you trigger manually
-│   ├── active/         ← Currently running
-│   ├── review/         ← Done, needs your review
-│   └── archived/       ← Finished
-└── status/             ← Progress tracking
-```
+| `/archive <plan-id>` | Archive a completed plan |
 
 ## Optional: Codex for Better Research
 
-Nova works best with OpenAI Codex for parallel research:
+Nova works even better with OpenAI Codex for parallel research and architectural analysis:
 
 ```bash
 npm install -g @openai/codex
 ```
 
-Without Codex, Nova falls back to Claude's built-in Explore agent (still works, just slower).
+Without Codex, Nova falls back to Claude's built-in Explore agent (still works fine).
 
 ## License
 
