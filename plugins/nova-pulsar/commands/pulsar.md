@@ -217,14 +217,17 @@ Use Bash with `run_in_background: true` to launch agents in parallel.
 
 **Example - 3 phases with different models (ALL in ONE response):**
 
-IMPORTANT: Set `NEUTRON_TASK_ID` so the status hook can track each phase:
+Each spawn command writes its own status (no hooks required):
 
 ```
 Bash #1:
   description: "Phase 1 - Codex (High Architectural)"
   run_in_background: true
   command: |
-    NEUTRON_TASK_ID=phase-1-plan-20260108-1200 codex exec --dangerously-bypass-approvals-and-sandbox "You are implementing Phase 1 of plan-20260108-1200.
+    TASK_ID="phase-1-plan-20260108-1200"
+    mkdir -p ./comms/status
+    echo '{"task_id":"'$TASK_ID'","status":"running","started_at":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"}' > ./comms/status/$TASK_ID.status
+    codex exec --dangerously-bypass-approvals-and-sandbox "You are implementing Phase 1 of plan-20260108-1200.
 
     CRITICAL RULES:
     - Implement this phase COMPLETELY
@@ -238,12 +241,16 @@ Bash #1:
     Files: src/auth/, src/middleware/auth.ts
 
     Co-Authored-By: Pulsar <noreply@anthropic.com>"
+    echo '{"task_id":"'$TASK_ID'","status":"completed","completed_at":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"}' > ./comms/status/$TASK_ID.status
 
 Bash #2:
   description: "Phase 2 - Opus (Medium)"
   run_in_background: true
   command: |
-    NEUTRON_TASK_ID=phase-2-plan-20260108-1200 claude --dangerously-skip-permissions "You are implementing Phase 2 of plan-20260108-1200.
+    TASK_ID="phase-2-plan-20260108-1200"
+    mkdir -p ./comms/status
+    echo '{"task_id":"'$TASK_ID'","status":"running","started_at":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"}' > ./comms/status/$TASK_ID.status
+    claude --dangerously-skip-permissions "You are implementing Phase 2 of plan-20260108-1200.
 
     CRITICAL RULES:
     - Implement this phase COMPLETELY
@@ -257,12 +264,16 @@ Bash #2:
     Files: src/auth/oauth.ts, src/config/oauth.ts
 
     Co-Authored-By: Pulsar <noreply@anthropic.com>"
+    echo '{"task_id":"'$TASK_ID'","status":"completed","completed_at":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"}' > ./comms/status/$TASK_ID.status
 
 Bash #3:
   description: "Phase 3 - Sonnet (Low)"
   run_in_background: true
   command: |
-    NEUTRON_TASK_ID=phase-3-plan-20260108-1200 claude --model sonnet --dangerously-skip-permissions "You are implementing Phase 3 of plan-20260108-1200.
+    TASK_ID="phase-3-plan-20260108-1200"
+    mkdir -p ./comms/status
+    echo '{"task_id":"'$TASK_ID'","status":"running","started_at":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"}' > ./comms/status/$TASK_ID.status
+    claude --model sonnet --dangerously-skip-permissions "You are implementing Phase 3 of plan-20260108-1200.
 
     CRITICAL RULES:
     - Implement this phase COMPLETELY
@@ -276,6 +287,7 @@ Bash #3:
     Files: docs/auth.md, docs/api.md
 
     Co-Authored-By: Pulsar <noreply@anthropic.com>"
+    echo '{"task_id":"'$TASK_ID'","status":"completed","completed_at":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"}' > ./comms/status/$TASK_ID.status
 ```
 
 Then poll status files until all phases complete:
@@ -296,9 +308,9 @@ cat ./comms/status/phase-3-plan-20260108-1200.status | jq -r '.status'
 3. All phases `"completed"` → proceed to next round
 
 **Why status files:**
-- Hook-based updates are atomic and reliable
-- Shows real-time progress (tool_count, last_tool, last_file)
-- Stop hook sets `"completed"` immediately when agent finishes
+- Self-contained - each spawn writes its own status (no plugin hooks required)
+- Wrapper pattern: write "running" → run agent → write "completed"
+- Works in any environment without configuration
 
 **TDD approach (MANDATORY for all agents):**
 
