@@ -1,6 +1,6 @@
 {
   "name": "nova-pulsar",
-  "version": "3.8.0",
+  "version": "3.9.0",
   "description": "Plan first, execute later. Nova plans your tasks, Pulsar builds them with parallel agents. Smart model routing: Codex for architecture, Opus for complex, Sonnet for simple.",
   "author": {
     "name": "AWLSEN"

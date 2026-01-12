@@ -563,6 +563,65 @@ is_loop=$(echo "$tools" | jq 'unique | length == 1')
 3. Continue with other independent phases
 4. Retry once if critical
 
+## CRITICAL: Single Source of Truth
+
+**Status files are your ONLY monitoring point. Do not look elsewhere.**
+
+### NEVER do these (wastes tokens, causes confusion):
+- Read .output files
+- Check if files were modified (git diff, ls -la)
+- Grep source files to verify changes
+- Read the phase agent's output directly
+- Check process status (ps, pgrep)
+
+### ONLY do this:
+```bash
+# One command tells you everything:
+cat ./comms/status/{phase-id}.status | jq '{s,n,t,stage}'
+```
+
+### What each field tells you:
+
+| Field | Question it answers |
+|-------|---------------------|
+| `s` | Is phase done? (`run` → working, `done` → complete, `err` → failed) |
+| `n` | Is phase active? (If increasing → yes) |
+| `t` | When was last activity? (If recent → healthy) |
+| `tools` | Is phase stuck in loop? (5x same tool → possible loop) |
+| `stage` | What kind of work? (explore/impl/test/clean) |
+
+### Parallel Monitoring Pattern
+
+When running 3 phases in parallel, check ALL THREE status files in ONE command:
+
+```bash
+# Check all phases at once - single source of truth
+for phase in phase-1-plan-xxx phase-2-plan-xxx phase-3-plan-xxx; do
+  echo "=== $phase ==="
+  cat ./comms/status/$phase.status | jq -c '{s,n,stage}'
+done
+```
+
+Output tells you everything:
+```
+=== phase-1-plan-xxx ===
+{"s":"run","n":23,"stage":"impl"}
+=== phase-2-plan-xxx ===
+{"s":"done","n":45,"stage":"test"}
+=== phase-3-plan-xxx ===
+{"s":"run","n":12,"stage":"explore"}
+```
+
+**Interpretation:** Phase 2 done, Phases 1 & 3 still running. No need to check anything else.
+
+### Trust the Hook
+
+The hook updates status files on EVERY tool call. If `n` is increasing, the agent IS working. You don't need to verify by checking other sources.
+
+**Mental model:**
+- Hook fires → status updates → you read status → you know state
+- That's it. One path. One source. No roaming.
+
 ## Error Handling
 
 **Continue executing (DO NOT STOP):**
