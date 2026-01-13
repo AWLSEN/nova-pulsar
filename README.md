@@ -53,14 +53,17 @@ Phases that touch **different files** run at the same time. Phases that **depend
 
 ## Install
 
-```
-/plugin marketplace add AWLSEN/nova-pulsar
-/plugin install nova-pulsar@AWLSEN-nova-pulsar --scope user
+```bash
+# Add the marketplace (one-time)
+/marketplace add github:AWLSEN/nova-pulsar
+
+# Install the plugin
+/install nova-pulsar
 ```
 
-**Important**: Use `--scope user` to make `/nova`, `/pulsar`, and `/rover` commands available globally. Then restart your Claude Code session.
+Then restart your Claude Code session for the hooks to load.
 
-The `./comms/` folder is created automatically when you first run `/nova`.
+The `~/comms/plans/` folder structure is created automatically when you first run `/nova`.
 
 ## How to Use
 
