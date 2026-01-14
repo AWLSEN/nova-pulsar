@@ -288,6 +288,14 @@ Executing Round 1 (Phase 1, 2)...
 
 **Hung Agent Detection:** If `tool_count` unchanged for 60+ seconds, the agent may be hung. Log a warning but continue waiting - some operations (like large builds) take time.
 
+**Stalled Agent Recovery:**
+
+If 3+ minutes pass and the `.status` file doesn't exist or is empty → agent is stalled. Recovery:
+1. `KillShell` with the task_id
+2. Wait 5 seconds
+3. Re-launch the same Bash command
+4. Max 2 retries per phase
+
 **Agent-Specific Guarantees:**
 
 - **Codex (High Architectural)**: Surgical analysis of existing patterns before any changes
