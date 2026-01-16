@@ -2,6 +2,15 @@
 
 **Plan first, then execute.** A Claude Code plugin that helps you break down complex tasks into plans and execute them with parallel agents.
 
+## Install
+
+```bash
+/plugin marketplace add AWLSEN/nova-pulsar
+/plugin install nova-pulsar@awlsen-plugins --scope user
+```
+
+Restart Claude Code after installing.
+
 ## What It Does
 
 ```
@@ -49,20 +58,6 @@ Pulsar figures out:
 ```
 
 Phases that touch **different files** run at the same time. Phases that **depend on others** wait.
-
-## Install
-
-```bash
-# Add the marketplace (one-time)
-/plugin marketplace add AWLSEN/nova-pulsar
-
-# Install the plugin
-/plugin install nova-pulsar@awlsen-plugins
-```
-
-Then restart your Claude Code session for the hooks to load.
-
-The `~/comms/plans/` folder structure is created automatically when you first run `/nova`.
 
 ## How to Use
 
