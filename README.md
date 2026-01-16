@@ -11,6 +11,24 @@
 
 Restart Claude Code after installing.
 
+## Directory Structure
+
+Plans are stored globally but namespaced by project:
+
+```
+~/comms/plans/
+├── {project-name}/           # One folder per project
+│   ├── queued/
+│   │   ├── background/       # Plans for daemon execution
+│   │   └── interactive/      # Plans for /pulsar execution
+│   ├── active/               # Currently executing plans
+│   ├── review/               # Completed, pending review
+│   ├── archived/             # Archived plans
+│   ├── logs/                 # Execution logs
+│   └── config.json           # Project config
+└── daemon.log                # Global daemon log
+```
+
 ## What It Does
 
 ```
@@ -95,14 +113,14 @@ Each plan gets an ID like `plan-20260113-1430`. You'll see it when Nova saves yo
 - **Just run `/pulsar`** - Picks the most recent queued plan automatically
 - **Run `/pulsar plan-20260113-1430`** - Execute a specific plan
 
-To see your queued plans: `ls ~/comms/plans/queued/interactive/`
+To see your queued plans: `ls ~/comms/plans/{project-name}/queued/interactive/`
 
 ### Execution Modes
 
 Nova will ask about execution mode:
 
 - **Interactive** (recommended): You run `/pulsar` when you're ready to execute
-- **Background**: A systemd service watches the background queue and executes plans automatically - perfect for "fire and forget" workflows
+- **Background**: The starry-daemon watches the background queue and executes plans automatically - perfect for "fire and forget" workflows
 
 ### 3. Archive when finished
 
@@ -118,6 +136,22 @@ Nova will ask about execution mode:
 | `/pulsar` | Execute the latest plan |
 | `/pulsar <plan-id>` | Execute a specific plan |
 | `/archive <plan-id>` | Archive a completed plan |
+
+## Background Daemon (Optional)
+
+For automated background execution, install the systemd service:
+
+```bash
+# Run setup from your project directory
+./scripts/setup.sh --with-systemd
+
+# Then manage with:
+systemctl --user start starry-daemon
+systemctl --user stop starry-daemon
+systemctl --user status starry-daemon
+```
+
+The daemon monitors all project namespaces and executes background plans automatically.
 
 ## Enhanced Research with Codex (Optional)
 

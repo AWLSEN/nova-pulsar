@@ -255,11 +255,15 @@ Options:
 ### Step 6: Save Plan
 
 On approval:
-1. Generate ID: `plan-{YYYYMMDD}-{HHMM}`
-2. Save to:
-   - Background: `~/comms/plans/queued/background/{id}.md`
-   - Interactive: `~/comms/plans/queued/interactive/{id}.md`
-3. Update `~/comms/plans/board.json`
+1. Determine project name from current directory: `basename $PWD`
+2. Generate ID: `plan-{YYYYMMDD}-{HHMM}`
+3. Ensure project namespace exists (create if needed):
+   - `~/comms/plans/{project-name}/queued/background/`
+   - `~/comms/plans/{project-name}/queued/interactive/`
+4. Save to namespaced location:
+   - Background: `~/comms/plans/{project-name}/queued/background/{id}.md`
+   - Interactive: `~/comms/plans/{project-name}/queued/interactive/{id}.md`
+5. Update project board: `~/comms/plans/{project-name}/board.json`
 
 ### Step 7: Handoff
 
@@ -275,6 +279,8 @@ On approval:
 
 ## Metadata
 - **ID**: plan-{timestamp}
+- **Project**: {project-name from basename $PWD}
+- **Project Path**: {full path to project directory}
 - **Type**: feature | bug | refactor | chore | docs
 - **Status**: queued
 - **Execution Mode**: background | interactive
@@ -450,10 +456,14 @@ Execution:
 
 ## board.json Entry
 
+Located at `~/comms/plans/{project-name}/board.json`:
+
 ```json
 {
   "id": "plan-20260105-1530",
   "title": "Plan title",
+  "project": "spoq-tui",
+  "projectPath": "/Users/you/conversations/spoq-tui",
   "type": "feature",
   "status": "queued",
   "executionMode": "background",

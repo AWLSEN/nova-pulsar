@@ -1,8 +1,14 @@
 #!/bin/bash
 # status-tracker.sh - PostToolUse hook for Pulsar sub-agent status tracking
 #
+# Part of Starry Night plugin
+#
 # Only writes status when PULSAR_TASK_ID env var is set (sub-agent context)
 # Uses atomic writes to prevent partial reads by orchestrator
+#
+# Required env vars:
+#   PULSAR_TASK_ID: format "phase-N-plan-YYYYMMDD-HHMM"
+#   PULSAR_PROJECT: project namespace name
 
 set -euo pipefail
 
@@ -19,15 +25,22 @@ HOOK_INPUT=$(cat)
 # Example: "phase-1-plan-20260113-1500"
 TASK_ID="$PULSAR_TASK_ID"
 
+# Get project name (required for namespaced paths)
+PROJECT_NAME="${PULSAR_PROJECT:-}"
+if [[ -z "$PROJECT_NAME" ]]; then
+    # Fallback: try to get from PWD
+    PROJECT_NAME=$(basename "$PWD")
+fi
+
 # Extract plan ID from task ID (everything after "phase-N-")
 PLAN_ID=$(echo "$TASK_ID" | sed 's/^phase-[0-9]*-//')
 
 # Extract phase number
 PHASE_NUM=$(echo "$TASK_ID" | grep -oE 'phase-[0-9]+' | grep -oE '[0-9]+')
 
-# Determine status directory
-PLANS_DIR="${HOME}/comms/plans"
-STATUS_DIR="${PLANS_DIR}/active/${PLAN_ID}/status"
+# Determine status directory (namespaced by project)
+COMMS_BASE="${HOME}/comms/plans"
+STATUS_DIR="${COMMS_BASE}/${PROJECT_NAME}/active/${PLAN_ID}/status"
 STATUS_FILE="${STATUS_DIR}/phase-${PHASE_NUM}.status"
 
 # Early exit if status directory doesn't exist (orchestrator hasn't created it yet)
@@ -79,6 +92,7 @@ TMP_FILE="${STATUS_FILE}.tmp.$$"
 
 jq -n \
     --arg task_id "$TASK_ID" \
+    --arg project "$PROJECT_NAME" \
     --arg status "running" \
     --argjson tool_count "$TOOL_COUNT" \
     --arg last_tool "$TOOL_NAME" \
@@ -87,6 +101,7 @@ jq -n \
     --arg started_at "$STARTED_AT" \
     '{
         task_id: $task_id,
+        project: $project,
         status: $status,
         tool_count: $tool_count,
         last_tool: $last_tool,

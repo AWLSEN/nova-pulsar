@@ -93,11 +93,14 @@ Response 1:
 
 ### Step 1: Load Plan
 
+Determine project name from current directory: `basename $PWD`
+Plans are stored at: `~/comms/plans/{project-name}/`
+
 **If plan-id provided**:
-- Look in `~/comms/plans/queued/background/` and `~/comms/plans/queued/interactive/`
+- Look in `~/comms/plans/{project-name}/queued/background/` and `~/comms/plans/{project-name}/queued/interactive/`
 
 **If no plan-id**:
-- Check `~/comms/plans/queued/interactive/` first
+- Check `~/comms/plans/{project-name}/queued/interactive/` first
 - If multiple, ask user which one
 - If none, inform user to run `/nova` first
 
@@ -165,7 +168,7 @@ Move plan from `queued/` to `active/`
 
 **Create status directory for sub-agent progress tracking:**
 ```bash
-mkdir -p ~/comms/plans/active/{plan-id}/status
+mkdir -p ~/comms/plans/{project-name}/active/{plan-id}/status
 ```
 
 This directory holds per-phase `.status` files written automatically by hooks in sub-agents. The orchestrator can poll these files to monitor progress while waiting for TaskOutput.
@@ -244,7 +247,7 @@ TaskOutput: task_id={Bash #2 id}
 
 While waiting for TaskOutput, poll status files to monitor sub-agent progress:
 
-**Status File Location:** `~/comms/plans/active/{plan-id}/status/phase-{N}.status`
+**Status File Location:** `~/comms/plans/{project-name}/active/{plan-id}/status/phase-{N}.status`
 
 **Status File Format:**
 ```json
@@ -578,7 +581,7 @@ Plan {id} executed.
 **Pulsar Execution (running as GLM-4.7):**
 
 ```
-Step 1: Load plan from ~/comms/plans/queued/background/plan-20260108-1200.md
+Step 1: Load plan from ~/comms/plans/my-project/queued/background/plan-20260108-1200.md
 
 Step 2: Analyze parallelism and agent selection
 - Phase 1 & 2: Independent (different files) → Round 1
@@ -589,7 +592,7 @@ Step 2: Analyze parallelism and agent selection
   - Phase 4: Sonnet 4.5 (Low)
   - Phase 5: Sonnet 4.5 (Low)
 
-Step 3: Move plan to ~/comms/plans/active/, update board.json
+Step 3: Move plan to ~/comms/plans/my-project/active/, update board.json
 
 Step 4: Execute Round 1 (via Bash with PULSAR_TASK_ID for status tracking)
 # Phase 1: High (Architectural) → codex
@@ -605,7 +608,7 @@ PULSAR_TASK_ID=phase-2-plan-20260108-1200 claude --dangerously-skip-permissions 
    RULES: Complete fully, no user interaction, write tests, commit (no push)" &
 
 # Poll status files while waiting (optional)
-# cat ~/comms/plans/active/plan-20260108-1200/status/phase-*.status | jq -c .
+# cat ~/comms/plans/my-project/active/plan-20260108-1200/status/phase-*.status | jq -c .
 
 wait
 
@@ -632,7 +635,7 @@ claude --dangerously-skip-permissions "Remove dead code" &
 wait
 
 Step 6: Finalize
-- Move plan to ~/comms/plans/review/
+- Move plan to ~/comms/plans/my-project/review/
 - Update board.json
 - Notify user
 ```
