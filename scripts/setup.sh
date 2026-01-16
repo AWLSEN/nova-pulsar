@@ -1,9 +1,9 @@
 #!/bin/bash
-# setup.sh - Set up Starry Night folder structure and optional systemd service
+# setup.sh - Set up Starry Night folder structure and daemon management
 #
-# Usage: ./setup.sh [project-name] [--with-systemd]
+# Usage: ./setup.sh [project-name] [--daemon start|stop|status]
 #   project-name: Name for the project namespace (default: current directory name)
-#   --with-systemd: Also install the systemd user service for background execution
+#   --daemon: Manage the background daemon (cross-platform, works on macOS/Linux)
 #
 # Directory structure (namespaced by project):
 #   ~/comms/plans/
@@ -21,18 +21,20 @@ set -e
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+RED='\033[0;31m'
 NC='\033[0m' # No Color
 
 COMMS_BASE="$HOME/comms/plans"
-INSTALL_SYSTEMD=false
+DAEMON_ACTION=""
 PROJECT_NAME=""
+PID_FILE="$COMMS_BASE/.starry-daemon.pid"
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --with-systemd)
-            INSTALL_SYSTEMD=true
-            shift
+        --daemon)
+            DAEMON_ACTION="$2"
+            shift 2
             ;;
         -*)
             # Unknown flag, skip
@@ -108,59 +110,120 @@ chmod +x "$SCRIPT_DIR/pulsar-auto.sh" 2>/dev/null || true
 echo -e "${YELLOW}Made scripts executable${NC}"
 echo ""
 
-# Step 4: Install systemd service (optional)
-if [ "$INSTALL_SYSTEMD" = true ]; then
-    echo -e "${YELLOW}Installing systemd user service...${NC}"
+# Daemon management functions
+daemon_start() {
+    if [ -f "$PID_FILE" ]; then
+        local pid=$(cat "$PID_FILE")
+        if ps -p "$pid" > /dev/null 2>&1; then
+            echo -e "${YELLOW}Daemon already running (PID: $pid)${NC}"
+            return 0
+        fi
+        # Stale PID file
+        rm -f "$PID_FILE"
+    fi
 
-    SYSTEMD_DIR="$HOME/.config/systemd/user"
-    mkdir -p "$SYSTEMD_DIR"
+    echo -e "${YELLOW}Starting Starry Night daemon...${NC}"
+    nohup "$SCRIPT_DIR/starry-daemon.sh" >> "$COMMS_BASE/daemon.log" 2>&1 &
+    local new_pid=$!
+    echo "$new_pid" > "$PID_FILE"
+    sleep 1
 
-    PLUGIN_SCRIPTS_DIR="$SCRIPT_DIR"
+    if ps -p "$new_pid" > /dev/null 2>&1; then
+        echo -e "${GREEN}Daemon started (PID: $new_pid)${NC}"
+        echo "Logs: tail -f $COMMS_BASE/daemon.log"
+    else
+        echo -e "${RED}Failed to start daemon${NC}"
+        rm -f "$PID_FILE"
+        return 1
+    fi
+}
 
-    cat > "$SYSTEMD_DIR/starry-daemon.service" << EOF
-[Unit]
-Description=Starry Night Daemon - Background plan execution
-After=default.target
+daemon_stop() {
+    if [ ! -f "$PID_FILE" ]; then
+        echo -e "${YELLOW}Daemon not running (no PID file)${NC}"
+        return 0
+    fi
 
-[Service]
-Type=simple
-ExecStart=$PLUGIN_SCRIPTS_DIR/starry-daemon.sh
-Restart=on-failure
-RestartSec=30
-Environment=HOME=$HOME
-Environment=PATH=$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin
+    local pid=$(cat "$PID_FILE")
+    if ps -p "$pid" > /dev/null 2>&1; then
+        echo -e "${YELLOW}Stopping daemon (PID: $pid)...${NC}"
+        kill "$pid" 2>/dev/null || true
+        sleep 1
+        # Force kill if still running
+        if ps -p "$pid" > /dev/null 2>&1; then
+            kill -9 "$pid" 2>/dev/null || true
+        fi
+        echo -e "${GREEN}Daemon stopped${NC}"
+    else
+        echo -e "${YELLOW}Daemon not running (stale PID file)${NC}"
+    fi
+    rm -f "$PID_FILE"
+}
 
-[Install]
-WantedBy=default.target
-EOF
+daemon_status() {
+    if [ ! -f "$PID_FILE" ]; then
+        echo -e "${YELLOW}Daemon: not running${NC}"
+        return 1
+    fi
 
-    echo "  Created: $SYSTEMD_DIR/starry-daemon.service"
+    local pid=$(cat "$PID_FILE")
+    if ps -p "$pid" > /dev/null 2>&1; then
+        echo -e "${GREEN}Daemon: running (PID: $pid)${NC}"
+        echo "Logs: $COMMS_BASE/daemon.log"
+        # Show recent log
+        if [ -f "$COMMS_BASE/daemon.log" ]; then
+            echo ""
+            echo "Recent activity:"
+            tail -5 "$COMMS_BASE/daemon.log" 2>/dev/null || true
+        fi
+        return 0
+    else
+        echo -e "${YELLOW}Daemon: not running (stale PID file)${NC}"
+        rm -f "$PID_FILE"
+        return 1
+    fi
+}
 
-    # Reload and enable
-    systemctl --user daemon-reload
-    systemctl --user enable starry-daemon
-
-    echo ""
-    echo -e "${GREEN}Systemd service installed!${NC}"
-    echo ""
-    echo "Commands:"
-    echo "  Start:   systemctl --user start starry-daemon"
-    echo "  Stop:    systemctl --user stop starry-daemon"
-    echo "  Status:  systemctl --user status starry-daemon"
-    echo "  Logs:    journalctl --user -u starry-daemon -f"
-    echo ""
-else
-    echo "Tip: Run with --with-systemd to install background execution service"
-    echo ""
+# Handle daemon commands
+if [ -n "$DAEMON_ACTION" ]; then
+    mkdir -p "$COMMS_BASE"
+    case "$DAEMON_ACTION" in
+        start)
+            daemon_start
+            ;;
+        stop)
+            daemon_stop
+            ;;
+        status)
+            daemon_status
+            ;;
+        restart)
+            daemon_stop
+            sleep 1
+            daemon_start
+            ;;
+        *)
+            echo -e "${RED}Unknown daemon action: $DAEMON_ACTION${NC}"
+            echo "Usage: ./setup.sh --daemon [start|stop|status|restart]"
+            exit 1
+            ;;
+    esac
+    exit 0
 fi
 
 # Done
 echo -e "${GREEN}Setup complete!${NC}"
 echo ""
 echo "Next steps:"
-echo "  1. Install the plugin:  /plugin install starry-night@awlsen-plugins --scope user"
+echo "  1. Install the plugin:  /plugin install starry-night@awlsen-plugins"
 echo "  2. Create a plan:       /nova <task description>"
 echo "  3. Execute a plan:      /pulsar [plan-id]"
+echo ""
+echo "Daemon management (cross-platform):"
+echo "  Start:   ./setup.sh --daemon start"
+echo "  Stop:    ./setup.sh --daemon stop"
+echo "  Status:  ./setup.sh --daemon status"
+echo "  Restart: ./setup.sh --daemon restart"
 echo ""
 echo "Your plans will be stored in: $PROJECT_DIR/"
 echo ""

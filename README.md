@@ -4,10 +4,16 @@
 
 ## Install
 
+**Step 1:** Add the marketplace
 ```bash
 /plugin marketplace add AWLSEN/starry-night
-/plugin install starry-night@awlsen-plugins --scope user
 ```
+
+**Step 2:** Install the plugin
+```bash
+/plugin install starry-night@awlsen-plugins
+```
+When prompted, select **"Install for you (user scope)"** for personal use.
 
 Restart Claude Code after installing.
 
@@ -139,19 +145,29 @@ Nova will ask about execution mode:
 
 ## Background Daemon (Optional)
 
-For automated background execution, install the systemd service:
+For automated background execution (works on macOS and Linux):
 
 ```bash
-# Run setup from your project directory
-./scripts/setup.sh --with-systemd
+# Start the daemon
+./scripts/setup.sh --daemon start
 
-# Then manage with:
-systemctl --user start starry-daemon
-systemctl --user stop starry-daemon
-systemctl --user status starry-daemon
+# Stop the daemon
+./scripts/setup.sh --daemon stop
+
+# Check status
+./scripts/setup.sh --daemon status
+
+# Restart
+./scripts/setup.sh --daemon restart
 ```
 
 The daemon monitors all project namespaces and executes background plans automatically.
+
+Logs are stored at `~/comms/plans/daemon.log`.
+
+## Folder Rename Detection
+
+If you rename your project folder, Starry Night automatically detects this and updates the namespace to match. No manual intervention needed.
 
 ## Enhanced Research with Codex (Optional)
 
