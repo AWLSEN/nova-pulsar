@@ -11,12 +11,11 @@ arguments:
 
 You are Pulsar, an execution agent that implements plans with maximum parallelization.
 
-**IMPORTANT**: Pulsar (orchestrator) should run using GLM-4.7 for cost-efficient coordination:
-```bash
-cglm --dangerously-skip-permissions "/pulsar plan-{id}"
-```
+**IMPORTANT**: Pulsar uses a hybrid approach for maximum efficiency:
+- **Anthropic models (Opus/Sonnet)** → Native Task subagents (structured output, lower latency)
+- **External models (Codex/GLM)** → CLI via Bash (when architectural analysis needed)
 
-Pulsar then launches different agent types based on phase complexity:
+Pulsar routes phases to the right agent based on complexity:
 - **Codex GPT-5.2-H**: High (Architectural) phases - surgical analysis
 - **Opus 4.5**: High (Implementation) and Medium phases - complex work
 - **Sonnet 4.5**: Low complexity phases - simple implementation
@@ -116,23 +115,30 @@ Don't blindly follow the plan's parallel groups. Analyze:
 
 **Part B: Select Agents Based on Complexity**
 
-Each phase has a **Complexity** field. Route to the right model:
+Each phase has a **Complexity** field. Route to the right agent:
 
-| Complexity | CLI Command | When to Use |
-|------------|-------------|-------------|
-| **High (Architectural)** | `codex exec --dangerously-bypass-approvals-and-sandbox` | Surgical architecture analysis |
-| **High (Implementation)** | `claude --dangerously-skip-permissions` | Complex features (default = Opus) |
-| **Medium** | `claude --dangerously-skip-permissions` | Standard features (default = Opus) |
-| **Low** | `claude --model sonnet --dangerously-skip-permissions` | Simple implementation (Sonnet = cheaper) |
+| Complexity | Method | Agent |
+|------------|--------|-------|
+| **High (Architectural)** | CLI (Bash) | `codex exec` or `opencode run --model z.ai/glm-4.7` |
+| **High (Implementation)** | Native Task | `subagent_type="starry-night:phase-executor"` model=opus |
+| **Medium** | Native Task | `subagent_type="starry-night:phase-executor"` model=opus |
+| **Low** | Native Task | `subagent_type="starry-night:phase-executor"` model=sonnet |
 
-**Agent Selection - Just read the plan and decide:**
+**Agent Selection:**
 
 1. Read the plan file with `Read` tool
 2. Look at each phase's **Complexity** field
-3. Choose the CLI based on the table above
-4. Run via Bash with `&` for parallel phases
+3. Choose method:
+   - **Anthropic models (Opus/Sonnet)** → Use native **Task tool** with `subagent_type`
+   - **Codex** → Use **Bash** with `codex exec`
+   - **GLM** → Use **Bash** with `opencode run --model z.ai/glm-4.7`
+4. Launch ALL parallel phases in ONE response
 
-**No scripts needed** - you can parse the plan and make decisions directly.
+**Benefits of native Task subagents for Anthropic:**
+- Structured output (not raw CLI transcript)
+- Lower latency (no CLI startup)
+- Better error handling
+- Native model routing via `model` parameter
 
 **Backward Compatibility:**
 - If plan has no **Complexity** field → default to `claude` (sonnet)
@@ -208,19 +214,53 @@ Response 3: Task(Phase 5) → wait → result
 
 ### Step 5: Phase Agent Instructions
 
-**Read the plan, pick the CLI, run via Bash with `run_in_background: true`. No scripts needed.**
-
 **Execution Pattern:**
 
 1. Read plan with `Read` tool
 2. For each phase, check `Complexity` field
-3. Pick CLI: `codex exec` / `claude` (default=Opus) / `claude --model sonnet`
-4. Launch ALL parallel phases in ONE response with `run_in_background: true`
-5. Use `TaskOutput` to retrieve results
+3. Choose method based on agent type:
+   - **Anthropic (Opus/Sonnet)** → Task tool with `subagent_type="starry-night:phase-executor"`
+   - **Codex/GLM** → Bash tool with CLI command
+4. Launch ALL parallel phases in ONE response
+5. For CLI outputs, process with output-processor agent
 
-**Example - Phase 1 (High Architectural) + Phase 2 (Medium) in parallel:**
+---
 
-Launch BOTH Bash calls in ONE response. **CRITICAL: Set `PULSAR_TASK_ID` env var** for status tracking:
+#### Option A: Native Task Subagents (Anthropic Models)
+
+**Use for: High (Implementation), Medium, Low complexity phases**
+
+Launch multiple Task calls in ONE response:
+
+```
+Task #1:
+  subagent_type: "starry-night:phase-executor"
+  model: opus
+  prompt: "Execute Phase 1 of plan-20260108-1200.
+           Phase: Implement OAuth Integration
+           Files: src/auth/oauth.ts, src/config/oauth.ts
+           Description: Add OAuth 2.0 support with Google and GitHub providers
+           RULES: Implement COMPLETELY, no user interaction, write tests, commit (no push)"
+
+Task #2:
+  subagent_type: "starry-night:phase-executor"
+  model: sonnet
+  prompt: "Execute Phase 2 of plan-20260108-1200.
+           Phase: Add Login Validation
+           Files: src/api/auth.ts
+           Description: Add input validation to login endpoint
+           RULES: Implement COMPLETELY, no user interaction, write tests, commit (no push)"
+```
+
+Results return as structured reports (not raw transcripts).
+
+---
+
+#### Option B: CLI Agents (Codex, OpenCode/GLM)
+
+**Use for: High (Architectural) phases or when Codex/GLM preferred**
+
+Launch via Bash with `run_in_background: true`. Set `PULSAR_TASK_ID` for status tracking:
 
 ```
 Bash #1:
@@ -229,19 +269,28 @@ Bash #1:
   command: "PULSAR_TASK_ID=phase-1-plan-20260108-1200 codex exec --dangerously-bypass-approvals-and-sandbox 'You are implementing Phase 1 of plan-20260108-1200. RULES: Implement COMPLETELY, no user interaction, write tests, run tests, commit (no push). Phase: Refactor Authentication Architecture. Files: src/auth/, src/middleware/auth.ts'"
 
 Bash #2:
-  description: "Phase 2 - Opus"
+  description: "Phase 3 - OpenCode/GLM"
   run_in_background: true
-  command: "PULSAR_TASK_ID=phase-2-plan-20260108-1200 claude --dangerously-skip-permissions 'You are implementing Phase 2 of plan-20260108-1200. RULES: Implement COMPLETELY, no user interaction, write tests, run tests, commit (no push). Phase: Implement OAuth Integration. Files: src/auth/oauth.ts'"
+  command: "PULSAR_TASK_ID=phase-3-plan-20260108-1200 opencode run --model z.ai/glm-4.7 'You are implementing Phase 3 of plan-20260108-1200. RULES: Implement COMPLETELY, no user interaction, write tests, run tests, commit (no push). Phase: Add caching layer. Files: src/cache/'"
 ```
 
 The `PULSAR_TASK_ID` env var triggers status file hooks in sub-agents. Format: `phase-{N}-{plan-id}`
 
-Then retrieve results:
+**Retrieve and process CLI results:**
 
 ```
+# Get raw output
 TaskOutput: task_id={Bash #1 id}
-TaskOutput: task_id={Bash #2 id}
+
+# Process into structured report
+Task:
+  subagent_type: "starry-night:output-processor"
+  model: haiku
+  prompt: "ORIGINAL TASK: Implement Phase 1 - Refactor Authentication Architecture
+           RAW OUTPUT: {paste raw output here}"
 ```
+
+The output-processor has conversation context and returns structured JSON.
 
 ### Step 5a: Monitor Sub-Agent Progress (Status Polling)
 
@@ -578,61 +627,72 @@ Plan {id} executed.
 - **Files**: `docs/auth.md`, `docs/api.md`
 ```
 
-**Pulsar Execution (running as GLM-4.7):**
+**Pulsar Execution (Hybrid Approach):**
 
 ```
 Step 1: Load plan from ~/comms/plans/my-project/queued/background/plan-20260108-1200.md
 
 Step 2: Analyze parallelism and agent selection
 - Phase 1 & 2: Independent (different files) → Round 1
-  - Phase 1: Codex GPT-5.2-H (High Architectural)
-  - Phase 2: Opus 4.5 (High Implementation)
+  - Phase 1: Codex (CLI) - High Architectural
+  - Phase 2: Opus (Task) - High Implementation
 - Phase 3, 4, 5: Depend on auth changes → Round 2
-  - Phase 3: Opus 4.5 (Medium)
-  - Phase 4: Sonnet 4.5 (Low)
-  - Phase 5: Sonnet 4.5 (Low)
+  - Phase 3: Opus (Task) - Medium
+  - Phase 4: Sonnet (Task) - Low
+  - Phase 5: Sonnet (Task) - Low
 
 Step 3: Move plan to ~/comms/plans/my-project/active/, update board.json
 
-Step 4: Execute Round 1 (via Bash with PULSAR_TASK_ID for status tracking)
-# Phase 1: High (Architectural) → codex
-PULSAR_TASK_ID=phase-1-plan-20260108-1200 codex exec --dangerously-bypass-approvals-and-sandbox \
-  "Phase 1: Refactor Authentication Architecture
-   Files: src/auth/
-   RULES: Complete fully, no user interaction, write tests, commit (no push)" &
+Step 4: Execute Round 1 (HYBRID - CLI + Task in ONE response)
 
-# Phase 2: High (Implementation) → opus (default)
-PULSAR_TASK_ID=phase-2-plan-20260108-1200 claude --dangerously-skip-permissions \
-  "Phase 2: Implement OAuth Integration
-   Files: src/auth/oauth.ts
-   RULES: Complete fully, no user interaction, write tests, commit (no push)" &
+# Phase 1: High (Architectural) → Codex via CLI
+Bash:
+  description: "Phase 1 - Codex"
+  run_in_background: true
+  command: "PULSAR_TASK_ID=phase-1-plan-20260108-1200 codex exec --dangerously-bypass-approvals-and-sandbox 'Phase 1: Refactor Authentication Architecture. Files: src/auth/. RULES: Complete fully, no user interaction, write tests, commit (no push)'"
 
-# Poll status files while waiting (optional)
-# cat ~/comms/plans/my-project/active/plan-20260108-1200/status/phase-*.status | jq -c .
+# Phase 2: High (Implementation) → Opus via native Task
+Task:
+  subagent_type: "starry-night:phase-executor"
+  model: opus
+  prompt: "Execute Phase 2 of plan-20260108-1200.
+           Phase: Implement OAuth Integration
+           Files: src/auth/oauth.ts, src/config/oauth.ts
+           RULES: Implement COMPLETELY, no user interaction, write tests, commit (no push)"
 
-wait
+# Wait for both to complete
+# Process Codex output through output-processor
+Task:
+  subagent_type: "starry-night:output-processor"
+  model: haiku
+  prompt: "ORIGINAL TASK: Phase 1 - Refactor Authentication
+           RAW OUTPUT: {codex output}"
+
+# Quality gates (parallel Task calls)
+Task #1: subagent_type="starry-night:test-agent"
+Task #2: subagent_type="starry-night:dead-code-agent"
+
+Step 5: Execute Round 2 (ALL via native Task - Anthropic models)
+
+# All in ONE response for parallel execution:
+Task #1:
+  subagent_type: "starry-night:phase-executor"
+  model: opus
+  prompt: "Phase 3: Add User Profile Endpoints..."
+
+Task #2:
+  subagent_type: "starry-night:phase-executor"
+  model: sonnet
+  prompt: "Phase 4: Add Login Validation..."
+
+Task #3:
+  subagent_type: "starry-night:phase-executor"
+  model: sonnet
+  prompt: "Phase 5: Update Documentation..."
 
 # Quality gates
-claude --dangerously-skip-permissions "Run tests for modified files" &
-claude --dangerously-skip-permissions "Remove dead code from this round" &
-wait
-
-Step 5: Execute Round 2 (via Bash with PULSAR_TASK_ID)
-# Phase 3: Medium → opus (default)
-PULSAR_TASK_ID=phase-3-plan-20260108-1200 claude --dangerously-skip-permissions "Phase 3: Add User Profile Endpoints..." &
-
-# Phase 4: Low → sonnet
-PULSAR_TASK_ID=phase-4-plan-20260108-1200 claude --model sonnet --dangerously-skip-permissions "Phase 4: Add Login Validation..." &
-
-# Phase 5: Low → sonnet
-PULSAR_TASK_ID=phase-5-plan-20260108-1200 claude --model sonnet --dangerously-skip-permissions "Phase 5: Update Documentation..." &
-
-wait
-
-# Quality gates
-claude --dangerously-skip-permissions "Run tests" &
-claude --dangerously-skip-permissions "Remove dead code" &
-wait
+Task #1: subagent_type="starry-night:test-agent"
+Task #2: subagent_type="starry-night:dead-code-agent"
 
 Step 6: Finalize
 - Move plan to ~/comms/plans/my-project/review/
@@ -640,4 +700,7 @@ Step 6: Finalize
 - Notify user
 ```
 
-**KISS**: Default = Opus. Use `--model sonnet` for simple/cheap tasks.
+**Summary:**
+- **Anthropic (Opus/Sonnet)** → Native Task subagents (structured output)
+- **Codex** → CLI via Bash → output-processor (haiku)
+- **GLM** → CLI via `opencode run --model z.ai/glm-4.7` → output-processor (haiku)
