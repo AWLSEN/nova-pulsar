@@ -3,37 +3,52 @@
 #
 # Part of Starry Night plugin
 #
-# Updates status field to "completed" or "failed" based on exit context
+# Updates status field to "completed" or "failed" based on exit context.
+# Also cleans up marker files for native Task agents.
 #
-# Required env vars:
+# Supported contexts:
+#   1. CLI agents: PULSAR_TASK_ID env var set
+#   2. Native Task agents: Marker file at ~/comms/plans/*/active/*/markers/$PPID
+#
+# Required env vars (for CLI agents):
 #   PULSAR_TASK_ID: format "phase-N-plan-YYYYMMDD-HHMM"
 #   PULSAR_PROJECT: project namespace name
 
 set -euo pipefail
 
-# Fast exit if not a Pulsar sub-agent
-if [[ -z "${PULSAR_TASK_ID:-}" ]]; then
-    echo '{}'
-    exit 0
-fi
-
 # Read hook input (may contain error indicators)
 HOOK_INPUT=$(cat)
 
-TASK_ID="$PULSAR_TASK_ID"
+TASK_ID=""
+PROJECT_NAME=""
+PLAN_ID=""
+PHASE_NUM=""
+MARKER_FILE=""
 
-# Get project name (required for namespaced paths)
-PROJECT_NAME="${PULSAR_PROJECT:-}"
-if [[ -z "$PROJECT_NAME" ]]; then
-    # Fallback: try to get from PWD
-    PROJECT_NAME=$(basename "$PWD")
+# 1. Check env var first (CLI agents / backward compat)
+if [[ -n "${PULSAR_TASK_ID:-}" ]]; then
+    TASK_ID="$PULSAR_TASK_ID"
+    PROJECT_NAME="${PULSAR_PROJECT:-$(basename "$PWD")}"
+    PLAN_ID=$(echo "$TASK_ID" | sed 's/^phase-[0-9]*-//')
+    PHASE_NUM=$(echo "$TASK_ID" | grep -oE 'phase-[0-9]+' | grep -oE '[0-9]+')
 fi
 
-# Extract plan ID from task ID (everything after "phase-N-")
-PLAN_ID=$(echo "$TASK_ID" | sed 's/^phase-[0-9]*-//')
+# 2. Check for session marker (native Task agents)
+if [[ -z "$TASK_ID" ]]; then
+    MARKER_FILE=$(find "$HOME/comms/plans"/*/active/*/markers/"$PPID" -type f 2>/dev/null | head -1)
+    if [[ -n "$MARKER_FILE" && -f "$MARKER_FILE" ]]; then
+        TASK_ID=$(jq -r '.session_id // ""' "$MARKER_FILE" 2>/dev/null || echo "")
+        PROJECT_NAME=$(jq -r '.project // ""' "$MARKER_FILE" 2>/dev/null || echo "")
+        PLAN_ID=$(jq -r '.plan_id // ""' "$MARKER_FILE" 2>/dev/null || echo "")
+        PHASE_NUM=$(jq -r '.phase // ""' "$MARKER_FILE" 2>/dev/null || echo "")
+    fi
+fi
 
-# Extract phase number
-PHASE_NUM=$(echo "$TASK_ID" | grep -oE 'phase-[0-9]+' | grep -oE '[0-9]+')
+# If no context found, exit (not a Pulsar sub-agent)
+if [[ -z "$TASK_ID" || -z "$PROJECT_NAME" || -z "$PLAN_ID" || -z "$PHASE_NUM" ]]; then
+    echo '{}'
+    exit 0
+fi
 
 # Determine status directory (namespaced by project)
 COMMS_BASE="${HOME}/comms/plans"
@@ -91,6 +106,11 @@ jq -n \
     }' > "$TMP_FILE"
 
 mv "$TMP_FILE" "$STATUS_FILE"
+
+# Cleanup marker file if it exists (native Task agents)
+if [[ -n "$MARKER_FILE" && -f "$MARKER_FILE" ]]; then
+    rm -f "$MARKER_FILE" 2>/dev/null || true
+fi
 
 echo '{}'
 exit 0

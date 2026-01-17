@@ -216,12 +216,16 @@ Update board.json:
 
 Move plan from `queued/` to `active/`
 
-**Create status directory for sub-agent progress tracking:**
+**Create status and markers directories for sub-agent progress tracking:**
 ```bash
 mkdir -p ~/comms/plans/{project-name}/active/{plan-id}/status
+mkdir -p ~/comms/plans/{project-name}/active/{plan-id}/markers
 ```
 
-This directory holds per-phase `.status` files written automatically by hooks in sub-agents. The orchestrator can poll these files to monitor progress while waiting for TaskOutput.
+- **status/**: Holds per-phase `.status` files written automatically by hooks in sub-agents
+- **markers/**: Holds session marker files written by phase-executors (enables hooks to identify native Task subagents)
+
+The orchestrator can poll status files to monitor progress while waiting for TaskOutput.
 
 ### Step 4: Execute with Maximum Parallelism
 
@@ -276,11 +280,18 @@ Response 3: Task(Phase 5) → wait → result
 
 Launch multiple Task calls in ONE response:
 
+**IMPORTANT**: Include the SESSION_ID header for status tracking. Format: `phase-{N}-{plan-id}`
+
 ```
 Task #1:
   subagent_type: "starry-night:phase-executor"
   model: opus
-  prompt: "Execute Phase 1 of plan-20260108-1200.
+  prompt: "SESSION: phase-1-plan-20260108-1200
+           PROJECT: my-project
+           PLAN_ID: plan-20260108-1200
+           PHASE: 1
+
+           Execute Phase 1 of plan-20260108-1200.
            Phase: Implement OAuth Integration
            Files: src/auth/oauth.ts, src/config/oauth.ts
            Description: Add OAuth 2.0 support with Google and GitHub providers
@@ -289,7 +300,12 @@ Task #1:
 Task #2:
   subagent_type: "starry-night:phase-executor"
   model: sonnet
-  prompt: "Execute Phase 2 of plan-20260108-1200.
+  prompt: "SESSION: phase-2-plan-20260108-1200
+           PROJECT: my-project
+           PLAN_ID: plan-20260108-1200
+           PHASE: 2
+
+           Execute Phase 2 of plan-20260108-1200.
            Phase: Add Login Validation
            Files: src/api/auth.ts
            Description: Add input validation to login endpoint
@@ -699,7 +715,12 @@ Bash:
 Task:
   subagent_type: "starry-night:phase-executor"
   model: opus
-  prompt: "Execute Phase 2 of plan-20260108-1200.
+  prompt: "SESSION: phase-2-plan-20260108-1200
+           PROJECT: my-project
+           PLAN_ID: plan-20260108-1200
+           PHASE: 2
+
+           Execute Phase 2 of plan-20260108-1200.
            Phase: Implement OAuth Integration
            Files: src/auth/oauth.ts, src/config/oauth.ts
            RULES: Implement COMPLETELY, no user interaction, write tests, commit (no push)"
@@ -722,17 +743,32 @@ Step 5: Execute Round 2 (ALL via native Task - Anthropic models)
 Task #1:
   subagent_type: "starry-night:phase-executor"
   model: opus
-  prompt: "Phase 3: Add User Profile Endpoints..."
+  prompt: "SESSION: phase-3-plan-20260108-1200
+           PROJECT: my-project
+           PLAN_ID: plan-20260108-1200
+           PHASE: 3
+
+           Phase 3: Add User Profile Endpoints..."
 
 Task #2:
   subagent_type: "starry-night:phase-executor"
   model: sonnet
-  prompt: "Phase 4: Add Login Validation..."
+  prompt: "SESSION: phase-4-plan-20260108-1200
+           PROJECT: my-project
+           PLAN_ID: plan-20260108-1200
+           PHASE: 4
+
+           Phase 4: Add Login Validation..."
 
 Task #3:
   subagent_type: "starry-night:phase-executor"
   model: sonnet
-  prompt: "Phase 5: Update Documentation..."
+  prompt: "SESSION: phase-5-plan-20260108-1200
+           PROJECT: my-project
+           PLAN_ID: plan-20260108-1200
+           PHASE: 5
+
+           Phase 5: Update Documentation..."
 
 # Quality gates
 Task #1: subagent_type="starry-night:test-agent"

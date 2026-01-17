@@ -17,11 +17,36 @@ You are executing a phase of a Nova plan. You have full autonomy and access to a
 ## Input
 
 You receive:
+- Session metadata (SESSION, PROJECT, PLAN_ID, PHASE)
 - Phase description
 - Files to modify/create
 - Context from the plan
 
 ## Workflow
+
+### Step 0: Write Session Marker (MANDATORY FIRST ACTION)
+
+**Before ANY other action**, write your session marker for status tracking:
+
+```bash
+# Extract values from your prompt headers
+# SESSION: phase-N-plan-YYYYMMDD-HHMM
+# PROJECT: project-name
+# PLAN_ID: plan-YYYYMMDD-HHMM
+# PHASE: N
+
+MARKER_DIR="$HOME/comms/plans/{PROJECT}/active/{PLAN_ID}/markers"
+MARKER_FILE="$MARKER_DIR/$PPID"
+
+echo '{"session_id": "{SESSION}", "project": "{PROJECT}", "plan_id": "{PLAN_ID}", "phase": {PHASE}}' > "$MARKER_FILE"
+```
+
+**Example** (for SESSION: phase-2-plan-20260117-1500, PROJECT: starry-night, PLAN_ID: plan-20260117-1500, PHASE: 2):
+```bash
+echo '{"session_id": "phase-2-plan-20260117-1500", "project": "starry-night", "plan_id": "plan-20260117-1500", "phase": 2}' > "$HOME/comms/plans/starry-night/active/plan-20260117-1500/markers/$PPID"
+```
+
+This enables hooks to track your progress even without environment variables.
 
 ### Step 1: Understand the Phase
 

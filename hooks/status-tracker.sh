@@ -3,50 +3,64 @@
 #
 # Part of Starry Night plugin
 #
-# Only writes status when PULSAR_TASK_ID env var is set (sub-agent context)
-# Uses atomic writes to prevent partial reads by orchestrator
+# Tracks sub-agent progress by updating status files on each tool use.
+# Uses atomic writes to prevent partial reads by orchestrator.
 #
-# Required env vars:
+# Supported contexts:
+#   1. CLI agents: PULSAR_TASK_ID env var set
+#   2. Native Task agents: Marker file at ~/comms/plans/*/active/*/markers/$PPID
+#
+# Required env vars (for CLI agents):
 #   PULSAR_TASK_ID: format "phase-N-plan-YYYYMMDD-HHMM"
 #   PULSAR_PROJECT: project namespace name
 
 set -euo pipefail
 
-# Fast exit if not a Pulsar sub-agent
-if [[ -z "${PULSAR_TASK_ID:-}" ]]; then
+# Read hook input from stdin first (must be consumed)
+HOOK_INPUT=$(cat)
+
+TASK_ID=""
+PROJECT_NAME=""
+PLAN_ID=""
+PHASE_NUM=""
+
+# 1. Check env var first (CLI agents / backward compat)
+if [[ -n "${PULSAR_TASK_ID:-}" ]]; then
+    TASK_ID="$PULSAR_TASK_ID"
+    PROJECT_NAME="${PULSAR_PROJECT:-$(basename "$PWD")}"
+    PLAN_ID=$(echo "$TASK_ID" | sed 's/^phase-[0-9]*-//')
+    PHASE_NUM=$(echo "$TASK_ID" | grep -oE 'phase-[0-9]+' | grep -oE '[0-9]+')
+fi
+
+# 2. Check for session marker (native Task agents)
+if [[ -z "$TASK_ID" ]]; then
+    MARKER_FILE=$(find "$HOME/comms/plans"/*/active/*/markers/"$PPID" -type f 2>/dev/null | head -1)
+    if [[ -n "$MARKER_FILE" && -f "$MARKER_FILE" ]]; then
+        TASK_ID=$(jq -r '.session_id // ""' "$MARKER_FILE" 2>/dev/null || echo "")
+        PROJECT_NAME=$(jq -r '.project // ""' "$MARKER_FILE" 2>/dev/null || echo "")
+        PLAN_ID=$(jq -r '.plan_id // ""' "$MARKER_FILE" 2>/dev/null || echo "")
+        PHASE_NUM=$(jq -r '.phase // ""' "$MARKER_FILE" 2>/dev/null || echo "")
+    fi
+fi
+
+# If no context found, exit (not a Pulsar sub-agent)
+if [[ -z "$TASK_ID" || -z "$PROJECT_NAME" || -z "$PLAN_ID" || -z "$PHASE_NUM" ]]; then
     echo '{}'
     exit 0
 fi
-
-# Read hook input from stdin
-HOOK_INPUT=$(cat)
-
-# Parse task ID: format is "phase-N-plan-YYYYMMDD-HHMM"
-# Example: "phase-1-plan-20260113-1500"
-TASK_ID="$PULSAR_TASK_ID"
-
-# Get project name (required for namespaced paths)
-PROJECT_NAME="${PULSAR_PROJECT:-}"
-if [[ -z "$PROJECT_NAME" ]]; then
-    # Fallback: try to get from PWD
-    PROJECT_NAME=$(basename "$PWD")
-fi
-
-# Extract plan ID from task ID (everything after "phase-N-")
-PLAN_ID=$(echo "$TASK_ID" | sed 's/^phase-[0-9]*-//')
-
-# Extract phase number
-PHASE_NUM=$(echo "$TASK_ID" | grep -oE 'phase-[0-9]+' | grep -oE '[0-9]+')
 
 # Determine status directory (namespaced by project)
 COMMS_BASE="${HOME}/comms/plans"
 STATUS_DIR="${COMMS_BASE}/${PROJECT_NAME}/active/${PLAN_ID}/status"
 STATUS_FILE="${STATUS_DIR}/phase-${PHASE_NUM}.status"
 
-# Early exit if status directory doesn't exist (orchestrator hasn't created it yet)
+# Create status directory if it doesn't exist (needed for native Task agents
+# where session-start may not have created it yet)
 if [[ ! -d "$STATUS_DIR" ]]; then
-    echo '{}'
-    exit 0
+    mkdir -p "$STATUS_DIR" 2>/dev/null || {
+        echo '{}'
+        exit 0
+    }
 fi
 
 # Extract tool information from hook input
