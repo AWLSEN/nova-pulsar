@@ -1,6 +1,6 @@
 ---
 name: nova
-description: "PLANNING ONLY - Never writes code. Researches codebase with AI agents (Codex/Opus), asks you clarifying questions, then outputs a structured plan with phases, complexity ratings, and parallelization analysis. Run /pulsar to execute the plan."
+description: "PLANNING ONLY - Never writes code. Researches codebase with Explore agents, asks clarifying questions, then outputs a structured plan with phases, complexity ratings, and parallelization analysis. Run /pulsar to execute the plan."
 ---
 
 # Nova - Planning Command
@@ -18,9 +18,15 @@ Nova launches multiple Explore agents in parallel to research the codebase befor
 3. **ALWAYS ask questions** - Don't assume, clarify with user
 4. **ALWAYS use AskUserQuestion** - For every decision point
 5. **ALWAYS include Parallelization Analysis** - Show dependency graph
-6. **RESEARCH DYNAMICALLY** - Launch as many Task agents as needed (not a fixed number)
+6. **RESEARCH DYNAMICALLY** - Launch as many Explore agents as needed (not a fixed number)
 7. **ITERATE RESEARCH** - Review findings, decide if more research needed, loop if necessary
-8. **USE TASK TOOL** - Launch parallel agents with `run_in_background: true`, retrieve with `TaskOutput`
+8. **USE TASK TOOL WITH EXPLORE AGENT** - Always use `subagent_type: "Explore"` for research:
+   ```
+   Task tool call:
+     subagent_type: "Explore"
+     prompt: "Your research question here"
+   ```
+   **DO NOT** use Bash/CLI for research. Use native Task tool with Explore agent.
 
 ## Workflow
 
@@ -61,9 +67,17 @@ Predicted questions to ask user later:
 
 **Phase B: Launch Research Agents (Dynamic, Parallel)**
 
-Based on your inner monologue, launch AS MANY research agents as needed.
+Based on your inner monologue, launch AS MANY Explore agents as needed.
 
-**Use the built-in Explore agent** via Task tool - it's optimized for codebase research:
+**CRITICAL: You MUST use `subagent_type: "Explore"`** when calling the Task tool:
+
+```
+Task tool invocation:
+  subagent_type: "Explore"   ← REQUIRED - must be exactly "Explore"
+  prompt: "Your question"
+```
+
+**DO NOT** omit `subagent_type` or use a different value. The Explore agent is optimized for codebase research:
 
 ```
 Response with 3 parallel Explore agents:
@@ -85,20 +99,28 @@ Response with 3 parallel Explore agents:
 
 **Example - Launch 3 parallel Explore agents:**
 
-Launch ALL Task calls in ONE response for parallel execution:
+Launch ALL Task tool calls in ONE response for parallel execution.
+
+**IMPORTANT:** Every Task call MUST include `subagent_type: "Explore"`:
 
 ```
-Task #1:
-  subagent_type: "Explore"
+Task tool call #1:
+  subagent_type: "Explore"   ← REQUIRED
   prompt: "Find all authentication-related files. Look for auth, login, session, token patterns. Report file locations and their purposes."
 
-Task #2:
-  subagent_type: "Explore"
+Task tool call #2:
+  subagent_type: "Explore"   ← REQUIRED
   prompt: "Find database and ORM files. Identify models, migrations, schema definitions. Report the database technology and patterns used."
 
-Task #3:
-  subagent_type: "Explore"
+Task tool call #3:
+  subagent_type: "Explore"   ← REQUIRED
   prompt: "Analyze the overall architecture patterns. Identify: folder structure conventions, naming patterns, how modules are organized, testing conventions."
+```
+
+**WRONG (missing subagent_type):**
+```
+Task tool call:
+  prompt: "Find files..."   ← WRONG - missing subagent_type!
 ```
 
 **Benefits of native Explore agent:**
@@ -493,30 +515,32 @@ Inner Monologue:
 - Where are tests located? → Explore agent
 ```
 
-**Launch 5 parallel Explore agents (ALL Task calls in ONE response):**
+**Launch 5 parallel Explore agents (ALL Task tool calls in ONE response):**
+
+**Every call MUST have `subagent_type: "Explore"`:**
 
 ```
-Task #1:
+Task tool call #1:
   subagent_type: "Explore"
   prompt: "Find all route/endpoint definitions. Look for files handling HTTP routes, API endpoints, URL patterns. Report locations and routing patterns used."
 
-Task #2:
+Task tool call #2:
   subagent_type: "Explore"
   prompt: "Find database and ORM files. Identify models, migrations, database client setup. Report the database technology and schema patterns."
 
-Task #3:
+Task tool call #3:
   subagent_type: "Explore"
   prompt: "Find existing authentication patterns. Look for auth, login, session, middleware files. Report how auth is currently handled (if at all)."
 
-Task #4:
+Task tool call #4:
   subagent_type: "Explore"
   prompt: "Analyze session/token strategy. Look for JWT, cookies, session storage. Report current auth token approach and storage mechanism."
 
-Task #5:
+Task tool call #5:
   subagent_type: "Explore"
   prompt: "Find test files and testing conventions. Identify test framework, test file patterns, fixture locations. Report testing approach used."
 ```
 
-**Results return together** - no need for TaskOutput retrieval.
+**Results return together** - native Task tool handles this automatically.
 
-**KISS**: Use native Explore agents. They're optimized for codebase research and return structured findings.
+**REMEMBER:** Always use `subagent_type: "Explore"` - never omit it!
