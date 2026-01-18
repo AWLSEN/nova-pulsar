@@ -24,29 +24,31 @@ You receive:
 
 ## Workflow
 
-### Step 0: Write Session Marker (MANDATORY FIRST ACTION)
+### Step 0: Claim Session Marker (RECOMMENDED FIRST ACTION)
 
-**Before ANY other action**, write your session marker for status tracking:
+Pulsar pre-creates a marker file for your phase. Claim it by adding your PID:
 
 ```bash
-# Extract values from your prompt headers
-# SESSION: phase-N-plan-YYYYMMDD-HHMM
-# PROJECT: project-name
-# PLAN_ID: plan-YYYYMMDD-HHMM
-# PHASE: N
-
-MARKER_DIR="$HOME/comms/plans/{PROJECT}/active/{PLAN_ID}/markers"
-MARKER_FILE="$MARKER_DIR/$PPID"
-
-echo '{"session_id": "{SESSION}", "project": "{PROJECT}", "plan_id": "{PLAN_ID}", "phase": {PHASE}}' > "$MARKER_FILE"
+MARKER="$HOME/comms/plans/{PROJECT}/active/{PLAN_ID}/markers/phase-{PHASE}.json"
+if [[ -f "$MARKER" ]]; then
+    jq --arg pid "$PPID" '.pid = $pid' "$MARKER" > "$MARKER.tmp" && mv "$MARKER.tmp" "$MARKER"
+else
+    # Fallback: Create marker if Pulsar didn't pre-create it
+    echo '{"session_id": "{SESSION}", "project": "{PROJECT}", "plan_id": "{PLAN_ID}", "phase": {PHASE}, "pid": "'$PPID'"}' > "$MARKER"
+fi
 ```
 
-**Example** (for SESSION: phase-2-plan-20260117-1500, PROJECT: starry-night, PLAN_ID: plan-20260117-1500, PHASE: 2):
+**Concrete example** (for SESSION: phase-2-plan-20260117-1500, PROJECT: starry-night, PHASE: 2):
 ```bash
-echo '{"session_id": "phase-2-plan-20260117-1500", "project": "starry-night", "plan_id": "plan-20260117-1500", "phase": 2}' > "$HOME/comms/plans/starry-night/active/plan-20260117-1500/markers/$PPID"
+MARKER="$HOME/comms/plans/starry-night/active/plan-20260117-1500/markers/phase-2.json"
+if [[ -f "$MARKER" ]]; then
+    jq --arg pid "$PPID" '.pid = $pid' "$MARKER" > "$MARKER.tmp" && mv "$MARKER.tmp" "$MARKER"
+else
+    echo '{"session_id": "phase-2-plan-20260117-1500", "project": "starry-night", "plan_id": "plan-20260117-1500", "phase": 2, "pid": "'$PPID'"}' > "$MARKER"
+fi
 ```
 
-This enables hooks to track your progress even without environment variables.
+**Why this matters**: Status tracking hooks use this marker to identify your session. If you skip this step, hooks will self-heal by claiming the unclaimed marker on the first tool use - but claiming it yourself is faster and more reliable.
 
 ### Step 1: Understand the Phase
 

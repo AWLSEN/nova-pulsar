@@ -223,7 +223,39 @@ mkdir -p ~/comms/plans/{project-name}/active/{plan-id}/markers
 ```
 
 - **status/**: Holds per-phase `.status` files written automatically by hooks in sub-agents
-- **markers/**: Holds session marker files written by phase-executors (enables hooks to identify native Task subagents)
+- **markers/**: Holds session marker files for identifying native Task subagents
+
+**CRITICAL: Pre-create phase markers BEFORE spawning any Task agents:**
+
+For EACH phase you're about to spawn, create its marker file FIRST:
+```bash
+# For each phase N in this round:
+echo '{
+  "session_id": "phase-{N}-{plan-id}",
+  "project": "{project-name}",
+  "plan_id": "{plan-id}",
+  "phase": {N},
+  "pid": null,
+  "created_by": "pulsar",
+  "created_at": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"
+}' > ~/comms/plans/{project-name}/active/{plan-id}/markers/phase-{N}.json
+```
+
+**Why pre-create markers?**
+- Hooks need marker metadata to track status
+- Phase-executors may not always write markers reliably (LLM compliance ~80%)
+- Pre-created markers enable hooks to self-heal (claim unclaimed markers)
+- Marker keyed by phase number (not PID) since we know phase but not PID yet
+
+**Example** (before spawning phases 1 and 2):
+```bash
+# Create markers for phases we're about to spawn
+echo '{"session_id":"phase-1-plan-20260108-1200","project":"my-project","plan_id":"plan-20260108-1200","phase":1,"pid":null,"created_by":"pulsar"}' > ~/comms/plans/my-project/active/plan-20260108-1200/markers/phase-1.json
+
+echo '{"session_id":"phase-2-plan-20260108-1200","project":"my-project","plan_id":"plan-20260108-1200","phase":2,"pid":null,"created_by":"pulsar"}' > ~/comms/plans/my-project/active/plan-20260108-1200/markers/phase-2.json
+
+# NOW spawn the Task agents
+```
 
 The orchestrator can poll status files to monitor progress while waiting for TaskOutput.
 

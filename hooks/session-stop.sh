@@ -24,18 +24,43 @@ PROJECT_NAME=""
 PLAN_ID=""
 PHASE_NUM=""
 MARKER_FILE=""
+PID_IN_MARKER=""
 
 # 1. Check env var first (CLI agents / backward compat)
 if [[ -n "${PULSAR_TASK_ID:-}" ]]; then
     TASK_ID="$PULSAR_TASK_ID"
     PROJECT_NAME="${PULSAR_PROJECT:-$(basename "$PWD")}"
     PLAN_ID=$(echo "$TASK_ID" | sed 's/^phase-[0-9]*-//')
-    PHASE_NUM=$(echo "$TASK_ID" | grep -oE 'phase-[0-9]+' | grep -oE '[0-9]+')
+    # Use sed instead of grep to avoid pipefail issues
+    PHASE_NUM=$(echo "$TASK_ID" | sed -n 's/.*phase-\([0-9]*\).*/\1/p')
 fi
 
-# 2. Check for session marker (native Task agents)
+# 2. Check for session marker (native Task agents) - with self-healing
 if [[ -z "$TASK_ID" ]]; then
-    MARKER_FILE=$(find "$HOME/comms/plans"/*/active/*/markers/"$PPID" -type f 2>/dev/null | head -1)
+    COMMS_BASE="$HOME/comms/plans"
+
+    # Strategy 1: Direct PID lookup (legacy + phase-executor claimed)
+    MARKER_FILE=$(find "$COMMS_BASE"/*/active/*/markers/"$PPID" -type f 2>/dev/null | head -1 || echo "")
+
+    # Strategy 2: Scan phase-keyed markers for PID match
+    if [[ -z "$MARKER_FILE" || ! -f "$MARKER_FILE" ]]; then
+        for PLAN_DIR in "$COMMS_BASE"/*/active/*/; do
+            [[ -d "$PLAN_DIR/markers" ]] || continue
+
+            for f in "$PLAN_DIR/markers"/phase-*.json; do
+                [[ -f "$f" ]] || continue
+
+                PID_IN_MARKER=$(jq -r '.pid // "null"' "$f" 2>/dev/null || echo "null")
+
+                # Found our marker (claimed by us)
+                if [[ "$PID_IN_MARKER" == "$PPID" ]]; then
+                    MARKER_FILE="$f"
+                    break 2
+                fi
+            done
+        done
+    fi
+
     if [[ -n "$MARKER_FILE" && -f "$MARKER_FILE" ]]; then
         TASK_ID=$(jq -r '.session_id // ""' "$MARKER_FILE" 2>/dev/null || echo "")
         PROJECT_NAME=$(jq -r '.project // ""' "$MARKER_FILE" 2>/dev/null || echo "")
@@ -61,12 +86,14 @@ if [[ ! -f "$STATUS_FILE" ]]; then
     exit 0
 fi
 
-# Read current status
-CURRENT_STATUS=$(cat "$STATUS_FILE")
-TOOL_COUNT=$(echo "$CURRENT_STATUS" | jq -r '.tool_count // 0')
-STARTED_AT=$(echo "$CURRENT_STATUS" | jq -r '.started_at')
-LAST_TOOL=$(echo "$CURRENT_STATUS" | jq -r '.last_tool // ""')
-LAST_FILE=$(echo "$CURRENT_STATUS" | jq -r '.last_file // ""')
+# Read current status (with error handling)
+CURRENT_STATUS=$(cat "$STATUS_FILE" 2>/dev/null || echo "{}")
+TOOL_COUNT=$(echo "$CURRENT_STATUS" | jq -r '.tool_count // 0' 2>/dev/null || echo "0")
+STARTED_AT=$(echo "$CURRENT_STATUS" | jq -r '.started_at // ""' 2>/dev/null || echo "")
+LAST_TOOL=$(echo "$CURRENT_STATUS" | jq -r '.last_tool // ""' 2>/dev/null || echo "")
+LAST_FILE=$(echo "$CURRENT_STATUS" | jq -r '.last_file // ""' 2>/dev/null || echo "")
+# If started_at is empty, initialize it
+[[ -z "$STARTED_AT" ]] && STARTED_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
 COMPLETED_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
@@ -83,7 +110,7 @@ fi
 # Write final status
 TMP_FILE="${STATUS_FILE}.tmp.$$"
 
-jq -n \
+if jq -n \
     --arg task_id "$TASK_ID" \
     --arg project "$PROJECT_NAME" \
     --arg status "$FINAL_STATUS" \
@@ -103,13 +130,22 @@ jq -n \
         updated_at: $updated_at,
         started_at: $started_at,
         completed_at: $completed_at
-    }' > "$TMP_FILE"
-
-mv "$TMP_FILE" "$STATUS_FILE"
+    }' > "$TMP_FILE" 2>/dev/null; then
+    mv "$TMP_FILE" "$STATUS_FILE" 2>/dev/null || true
+else
+    rm -f "$TMP_FILE" 2>/dev/null || true
+fi
 
 # Cleanup marker file if it exists (native Task agents)
+# Clean up both PID-keyed and phase-keyed markers
 if [[ -n "$MARKER_FILE" && -f "$MARKER_FILE" ]]; then
     rm -f "$MARKER_FILE" 2>/dev/null || true
+fi
+# Also try to clean up phase-keyed marker if it exists
+COMMS_BASE="${HOME}/comms/plans"
+PHASE_MARKER="${COMMS_BASE}/${PROJECT_NAME}/active/${PLAN_ID}/markers/phase-${PHASE_NUM}.json"
+if [[ -f "$PHASE_MARKER" ]]; then
+    rm -f "$PHASE_MARKER" 2>/dev/null || true
 fi
 
 echo '{}'

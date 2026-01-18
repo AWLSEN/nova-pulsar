@@ -20,20 +20,55 @@ TASK_ID=""
 PROJECT_NAME=""
 PLAN_ID=""
 PHASE_NUM=""
+PID_IN_MARKER=""
 
 # 1. Check env var first (CLI agents / backward compat)
 if [[ -n "${PULSAR_TASK_ID:-}" ]]; then
     TASK_ID="$PULSAR_TASK_ID"
     PROJECT_NAME="${PULSAR_PROJECT:-$(basename "$PWD")}"
     PLAN_ID=$(echo "$TASK_ID" | sed 's/^phase-[0-9]*-//')
-    PHASE_NUM=$(echo "$TASK_ID" | grep -oE 'phase-[0-9]+' | grep -oE '[0-9]+')
+    # Use sed instead of grep to avoid pipefail issues when pattern doesn't match
+    PHASE_NUM=$(echo "$TASK_ID" | sed -n 's/.*phase-\([0-9]*\).*/\1/p')
 fi
 
-# 2. Check for session marker (native Task agents)
-# Note: Marker may not exist yet at session start - phase-executor writes it as first action
-# This hook may be called before the marker exists, so we check but don't fail
+# 2. Check for session marker (native Task agents) - with self-healing
+# Note: Pulsar pre-creates markers/phase-{N}.json before spawning
+# Phase-executor claims it by adding PID, but if not, we self-heal
 if [[ -z "$TASK_ID" ]]; then
-    MARKER_FILE=$(find "$HOME/comms/plans"/*/active/*/markers/"$PPID" -type f 2>/dev/null | head -1)
+    COMMS_BASE="$HOME/comms/plans"
+    MARKER_FILE=""
+
+    # Strategy 1: Direct PID lookup (legacy + phase-executor claimed by creating PID file)
+    MARKER_FILE=$(find "$COMMS_BASE"/*/active/*/markers/"$PPID" -type f 2>/dev/null | head -1 || echo "")
+
+    # Strategy 2: Scan phase-keyed markers for PID match or unclaimed
+    if [[ -z "$MARKER_FILE" || ! -f "$MARKER_FILE" ]]; then
+        for PLAN_DIR in "$COMMS_BASE"/*/active/*/; do
+            [[ -d "$PLAN_DIR/markers" ]] || continue
+
+            for f in "$PLAN_DIR/markers"/phase-*.json; do
+                [[ -f "$f" ]] || continue
+
+                PID_IN_MARKER=$(jq -r '.pid // "null"' "$f" 2>/dev/null || echo "null")
+
+                # Already claimed by us
+                if [[ "$PID_IN_MARKER" == "$PPID" ]]; then
+                    MARKER_FILE="$f"
+                    break 2
+                fi
+
+                # Unclaimed marker (pid is null) - claim it!
+                if [[ "$PID_IN_MARKER" == "null" ]]; then
+                    if jq --arg pid "$PPID" '.pid = $pid' "$f" > "$f.tmp" 2>/dev/null; then
+                        mv "$f.tmp" "$f" 2>/dev/null || true
+                        MARKER_FILE="$f"
+                        break 2
+                    fi
+                fi
+            done
+        done
+    fi
+
     if [[ -n "$MARKER_FILE" && -f "$MARKER_FILE" ]]; then
         TASK_ID=$(jq -r '.session_id // ""' "$MARKER_FILE" 2>/dev/null || echo "")
         PROJECT_NAME=$(jq -r '.project // ""' "$MARKER_FILE" 2>/dev/null || echo "")
@@ -48,8 +83,9 @@ if [[ -z "$TASK_ID" || -z "$PROJECT_NAME" || -z "$PLAN_ID" || -z "$PHASE_NUM" ]]
     COMMS_BASE="${HOME}/comms/plans"
     if [[ -d "$COMMS_BASE" ]]; then
         # Count active and queued plans across all projects
-        ACTIVE_COUNT=$(find "$COMMS_BASE"/*/active -maxdepth 1 -type d 2>/dev/null | grep -v '^$' | wc -l | tr -d ' ')
-        QUEUED_COUNT=$(find "$COMMS_BASE"/*/queued -maxdepth 2 -type d 2>/dev/null | grep -v '^$' | wc -l | tr -d ' ')
+        # Note: Don't use grep in pipeline - it fails with exit 1 when no matches, breaking pipefail
+        ACTIVE_COUNT=$(find "$COMMS_BASE"/*/active -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ' || echo "0")
+        QUEUED_COUNT=$(find "$COMMS_BASE"/*/queued -maxdepth 2 -type d 2>/dev/null | wc -l | tr -d ' ' || echo "0")
 
         # If there are active/queued plans and no Orbiter running, could spawn one
         # (Orbiter auto-start disabled for now - uncomment when ready)
@@ -85,7 +121,7 @@ STARTED_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 # Write initial status
 TMP_FILE="${STATUS_FILE}.tmp.$$"
 
-jq -n \
+if jq -n \
     --arg task_id "$TASK_ID" \
     --arg project "$PROJECT_NAME" \
     --arg status "starting" \
@@ -103,9 +139,11 @@ jq -n \
         last_file: $last_file,
         updated_at: $updated_at,
         started_at: $started_at
-    }' > "$TMP_FILE"
-
-mv "$TMP_FILE" "$STATUS_FILE"
+    }' > "$TMP_FILE" 2>/dev/null; then
+    mv "$TMP_FILE" "$STATUS_FILE" 2>/dev/null || true
+else
+    rm -f "$TMP_FILE" 2>/dev/null || true
+fi
 
 echo '{}'
 exit 0
