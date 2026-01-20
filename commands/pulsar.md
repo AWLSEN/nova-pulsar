@@ -175,7 +175,7 @@ mkdir -p ~/comms/plans/{project-name}/active/{plan-id}/markers
 - **status/**: Holds per-phase `.status` files written automatically by hooks in sub-agents
 - **markers/**: Holds session marker files for identifying spawned CLI agents
 
-**CRITICAL: Pre-create phase markers BEFORE spawning any Task agents:**
+**CRITICAL: Pre-create phase markers BEFORE spawning any Bash agents:**
 
 For EACH phase you're about to spawn, create its marker file FIRST:
 ```bash
@@ -397,15 +397,15 @@ Round 1:
 ├── Codex GPT-5.2-H: Execute Phase 1 (High - Architectural) ──┐
 ├── Opus 4.5: Execute Phase 2 (Medium) ────────────────────────┼── Wait for all
                                                                ↓
-├── Task: Dead Code Agent ──┐
-├── Task: Test Agent ───────┼── Wait for all (parallel)
-                            ↓
+├── Bash: Dead Code Agent (run_in_background) ──┐
+├── Bash: Test Agent (run_in_background) ───────┼── Wait for all (parallel)
+                                                ↓
 Round 2:
 ├── Sonnet 4.5: Execute Phase 3 (Low) ──── Wait
                                         ↓
-├── Task: Dead Code Agent ──┐
-├── Task: Test Agent ───────┼── Wait for all (parallel)
-                            ↓
+├── Bash: Dead Code Agent (run_in_background) ──┐
+├── Bash: Test Agent (run_in_background) ───────┼── Wait for all (parallel)
+                                                ↓
 Done → Finalize
 ```
 
@@ -434,11 +434,25 @@ TaskOutput: task_id={Bash #1 id}
 TaskOutput: task_id={Bash #2 id}
 ```
 
-**Then launch quality gates in parallel (ALL Task calls in ONE response):**
+**Then launch quality gates in parallel (ALL Bash calls in ONE response):**
 
 ```
-Task #1: subagent_type="pulsar:dead-code-agent"
-Task #2: subagent_type="pulsar:test-agent"
+Bash #1:
+  description: "Quality Gate - Test Agent"
+  run_in_background: true
+  command: "PULSAR_TASK_ID=qg-test-round-{N}-{plan-id} claude --model sonnet --dangerously-skip-permissions 'Run tests for modified files. Files: {list}. RULES: Run existing tests, write missing tests, ensure all pass, commit fixes (no push)'"
+
+Bash #2:
+  description: "Quality Gate - Dead Code Agent"
+  run_in_background: true
+  command: "PULSAR_TASK_ID=qg-deadcode-round-{N}-{plan-id} claude --model sonnet --dangerously-skip-permissions 'Remove dead code from this round. Files: {list}. RULES: Remove unused imports/functions/variables introduced this round, commit changes (no push)'"
+```
+
+**Monitor via status files, then retrieve with TaskOutput:**
+```
+# Poll status files while waiting (see Step 6 for details)
+TaskOutput: task_id={Bash #1 id}
+TaskOutput: task_id={Bash #2 id}
 ```
 
 **NOT acceptable:**
@@ -452,25 +466,52 @@ Task #2: subagent_type="pulsar:test-agent"
 
 **Run AFTER each round of phases completes (not just at the end).**
 
-Launch these two agents IN PARALLEL after every round (both Task calls in ONE response):
+Launch these two agents IN PARALLEL after every round (both Bash calls with `run_in_background: true` in ONE response):
 
-**Use the plugin agents:**
+**Launch via Bash CLI commands (set PULSAR_TASK_ID for status tracking):**
 ```
-Task #1:
-  subagent_type: "pulsar:test-agent"
-  prompt: "Round {N}. Files modified: {list of files}"
+Bash #1:
+  description: "Quality Gate - Test Agent"
+  run_in_background: true
+  command: "PULSAR_TASK_ID=qg-test-round-{N}-{plan-id} claude --model sonnet --dangerously-skip-permissions 'Round {N} quality gate. Files modified: {list of files}. TASK: Run existing tests, write missing tests for new functionality, ensure all pass, fix any failures, commit fixes (no push)'"
 
-Task #2:
-  subagent_type: "pulsar:dead-code-agent"
-  prompt: "Round {N}. Files modified: {list of files}"
+Bash #2:
+  description: "Quality Gate - Dead Code Agent"
+  run_in_background: true
+  command: "PULSAR_TASK_ID=qg-deadcode-round-{N}-{plan-id} claude --model sonnet --dangerously-skip-permissions 'Round {N} quality gate. Files modified: {list of files}. TASK: Remove code that became unused due to THIS rounds changes - unused imports, functions, variables. Commit changes (no push)'"
+```
+
+**Monitor quality gate progress via status files:**
+
+While waiting, poll the status files to track progress:
+```bash
+# Status files written by hooks:
+# ~/comms/plans/{project-name}/active/{plan-id}/status/qg-test-round-{N}.status
+# ~/comms/plans/{project-name}/active/{plan-id}/status/qg-deadcode-round-{N}.status
+
+for i in {1..30}; do
+    for qg in "qg-test-round-{N}" "qg-deadcode-round-{N}"; do
+        STATUS_FILE="$HOME/comms/plans/{project-name}/active/{plan-id}/status/${qg}.status"
+        if [[ -f "$STATUS_FILE" ]]; then
+            cat "$STATUS_FILE" | jq -c '{task: .task_id, status: .status, tools: .tool_count, last: .last_tool}'
+        fi
+    done
+    sleep 5
+done
+```
+
+**Then retrieve results with TaskOutput:**
+```
+TaskOutput: task_id={Bash #1 id}
+TaskOutput: task_id={Bash #2 id}
 ```
 
 **What each agent does:**
 
 | Agent | Purpose |
 |-------|---------|
-| `test-agent` | Runs existing tests, writes missing tests, ensures all pass |
-| `dead-code-agent` | Removes code that became unused due to THIS round's changes |
+| Test Agent | Runs existing tests, writes missing tests, ensures all pass |
+| Dead Code Agent | Removes code that became unused due to THIS round's changes |
 
 **Both agents run in parallel** - they don't conflict because:
 - Dead Code Agent: Removes unused code
@@ -648,9 +689,24 @@ Bash #2:
 TaskOutput: task_id={Bash #1 id}
 TaskOutput: task_id={Bash #2 id}
 
-# Quality gates (parallel Task calls)
-Task #1: subagent_type="starry-night:test-agent"
-Task #2: subagent_type="starry-night:dead-code-agent"
+# Quality gates (ALL Bash calls in ONE response, with PULSAR_TASK_ID for status tracking)
+Bash #1:
+  description: "Quality Gate - Test Agent"
+  run_in_background: true
+  command: "PULSAR_TASK_ID=qg-test-round-1-plan-20260108-1200 claude --model sonnet --dangerously-skip-permissions 'Round 1 quality gate. Files: src/auth/. Run tests, write missing tests, ensure all pass, commit fixes (no push)'"
+
+Bash #2:
+  description: "Quality Gate - Dead Code Agent"
+  run_in_background: true
+  command: "PULSAR_TASK_ID=qg-deadcode-round-1-plan-20260108-1200 claude --model sonnet --dangerously-skip-permissions 'Round 1 quality gate. Files: src/auth/. Remove unused code from this round, commit (no push)'"
+
+# Poll status files while waiting:
+# ~/comms/plans/my-project/active/plan-20260108-1200/status/qg-test-round-1.status
+# ~/comms/plans/my-project/active/plan-20260108-1200/status/qg-deadcode-round-1.status
+
+# Then retrieve results with TaskOutput
+TaskOutput: task_id={Bash #1 id}
+TaskOutput: task_id={Bash #2 id}
 
 Step 5: Execute Round 2 (ALL Bash calls in ONE response)
 
@@ -677,9 +733,24 @@ TaskOutput: task_id={Bash #1 id}
 TaskOutput: task_id={Bash #2 id}
 TaskOutput: task_id={Bash #3 id}
 
-# Quality gates
-Task #1: subagent_type="starry-night:test-agent"
-Task #2: subagent_type="starry-night:dead-code-agent"
+# Quality gates (ALL Bash calls in ONE response, with PULSAR_TASK_ID for status tracking)
+Bash #1:
+  description: "Quality Gate - Test Agent"
+  run_in_background: true
+  command: "PULSAR_TASK_ID=qg-test-round-2-plan-20260108-1200 claude --model sonnet --dangerously-skip-permissions 'Round 2 quality gate. Files: src/api/, docs/. Run tests, write missing tests, ensure all pass, commit fixes (no push)'"
+
+Bash #2:
+  description: "Quality Gate - Dead Code Agent"
+  run_in_background: true
+  command: "PULSAR_TASK_ID=qg-deadcode-round-2-plan-20260108-1200 claude --model sonnet --dangerously-skip-permissions 'Round 2 quality gate. Files: src/api/, docs/. Remove unused code from this round, commit (no push)'"
+
+# Poll status files while waiting:
+# ~/comms/plans/my-project/active/plan-20260108-1200/status/qg-test-round-2.status
+# ~/comms/plans/my-project/active/plan-20260108-1200/status/qg-deadcode-round-2.status
+
+# Then retrieve results with TaskOutput
+TaskOutput: task_id={Bash #1 id}
+TaskOutput: task_id={Bash #2 id}
 
 Step 6: Finalize
 - Move plan to ~/comms/plans/my-project/review/
