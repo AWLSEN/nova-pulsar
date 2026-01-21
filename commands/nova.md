@@ -267,13 +267,16 @@ Options:
 On approval:
 1. Determine project name from current directory: `basename $PWD`
 2. Generate ID: `plan-{YYYYMMDD}-{HHMM}`
-3. Ensure project namespace exists (create if needed):
+3. Extract Thread ID from prompt context (look for `[Thread: xxx]` prefix at the start of your prompt)
+   - If present: use the extracted thread_id
+   - If not present: use "null" as the value
+4. Ensure project namespace exists (create if needed):
    - `~/comms/plans/{project-name}/queued/background/`
    - `~/comms/plans/{project-name}/queued/interactive/`
-4. Save to namespaced location:
+5. Save to namespaced location:
    - Background: `~/comms/plans/{project-name}/queued/background/{id}.md`
    - Interactive: `~/comms/plans/{project-name}/queued/interactive/{id}.md`
-5. Update project board: `~/comms/plans/{project-name}/board.json`
+6. Update project board: `~/comms/plans/{project-name}/board.json`
 
 ### Step 7: Handoff
 
@@ -291,6 +294,7 @@ On approval:
 - **ID**: plan-{timestamp}
 - **Project**: {project-name from basename $PWD}
 - **Project Path**: {full path to project directory}
+- **Thread ID**: {extracted thread_id from [Thread: xxx] prefix, or "null" if not present}
 - **Type**: feature | bug | refactor | chore | docs
 - **Status**: queued
 - **Execution Mode**: background | interactive
