@@ -267,9 +267,11 @@ Options:
 On approval:
 1. Determine project name from current directory: `basename $PWD`
 2. Generate ID: `plan-{YYYYMMDD}-{HHMM}`
-3. Extract Thread ID from prompt context (look for `[Thread: xxx]` prefix at the start of your prompt)
-   - If present: use the extracted thread_id
-   - If not present: use "null" as the value
+3. **Extract Thread ID from prompt context:**
+   - Look for `[Thread: xxx]` prefix at the very start of your system prompt
+   - If found: Extract the thread_id value (e.g., "[Thread: abc123]" → "abc123")
+   - If not found: Use "null" as the value
+   - Example: "[Thread: 01JHHXYZ...]" → thread_id = "01JHHXYZ..."
 4. Ensure project namespace exists (create if needed):
    - `~/comms/plans/{project-name}/queued/background/`
    - `~/comms/plans/{project-name}/queued/interactive/`
