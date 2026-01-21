@@ -23,14 +23,68 @@ log() {
     echo "[starry-night] $1"
 }
 
+# Migrate old directory structure to new one
+migrate_structure() {
+    local migrated=false
+
+    # Migrate review/ → completed/
+    if [ -d "$PROJECT_DIR/review" ]; then
+        log "Migrating review/ → completed/"
+        mkdir -p "$PROJECT_DIR/completed"
+
+        if [ "$(ls -A "$PROJECT_DIR/review" 2>/dev/null)" ]; then
+            cp -r "$PROJECT_DIR/review/"* "$PROJECT_DIR/completed/" 2>/dev/null || true
+            log "  Moved $(ls "$PROJECT_DIR/review" 2>/dev/null | wc -l | tr -d ' ') plans from review/"
+        fi
+
+        rm -rf "$PROJECT_DIR/review"
+        migrated=true
+    fi
+
+    # Migrate archived/ → completed/
+    if [ -d "$PROJECT_DIR/archived" ]; then
+        log "Migrating archived/ → completed/"
+        mkdir -p "$PROJECT_DIR/completed"
+
+        if [ "$(ls -A "$PROJECT_DIR/archived" 2>/dev/null)" ]; then
+            cp -r "$PROJECT_DIR/archived/"* "$PROJECT_DIR/completed/" 2>/dev/null || true
+            log "  Moved $(ls "$PROJECT_DIR/archived" 2>/dev/null | wc -l | tr -d ' ') plans from archived/"
+        fi
+
+        rm -rf "$PROJECT_DIR/archived"
+        migrated=true
+    fi
+
+    # Update board.json to change "review" and "archived" status to "completed"
+    if [ -f "$PROJECT_DIR/board.json" ]; then
+        if command -v jq >/dev/null 2>&1; then
+            # Use jq to update status fields
+            local temp_file=$(mktemp)
+            jq '(.plans[]? | select(.status == "review" or .status == "archived") | .status) = "completed" |
+                (.plans[]? | select(.path) | .path) |= gsub("/(review|archived)/"; "/completed/")' \
+                "$PROJECT_DIR/board.json" > "$temp_file" 2>/dev/null && mv "$temp_file" "$PROJECT_DIR/board.json" || rm -f "$temp_file"
+
+            log "  Updated board.json status entries"
+        else
+            # Fallback: simple sed replacement if jq not available
+            sed -i.bak 's/"status": "review"/"status": "completed"/g; s/"status": "archived"/"status": "completed"/g; s|/review/|/completed/|g; s|/archived/|/completed/|g' "$PROJECT_DIR/board.json" 2>/dev/null || true
+            rm -f "$PROJECT_DIR/board.json.bak"
+            log "  Updated board.json status entries (fallback)"
+        fi
+    fi
+
+    if [ "$migrated" = true ]; then
+        log "Migration complete! Old plans now in completed/"
+    fi
+}
+
 # Create folder structure
 setup_folders() {
     mkdir -p "$COMMS_BASE"
     mkdir -p "$PROJECT_DIR/queued/background"
     mkdir -p "$PROJECT_DIR/queued/interactive"
     mkdir -p "$PROJECT_DIR/active"
-    mkdir -p "$PROJECT_DIR/review"
-    mkdir -p "$PROJECT_DIR/archived"
+    mkdir -p "$PROJECT_DIR/completed"
     mkdir -p "$PROJECT_DIR/logs"
 
     # Create project config if needed
@@ -120,6 +174,7 @@ main() {
     log "First-run setup starting..."
 
     setup_folders
+    migrate_structure
     check_dependencies
     setup_scripts
 

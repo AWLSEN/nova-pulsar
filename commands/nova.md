@@ -186,7 +186,7 @@ Options: [contextual options]
 
 Question: "Execution mode?"
 Options:
-- Auto (executes in background, goes to review)
+- Auto (executes in background, auto-completes)
 - Manual (you trigger /pulsar when ready)
 ```
 

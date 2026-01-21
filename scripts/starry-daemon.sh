@@ -13,8 +13,7 @@
 #   │   ├── queued/background/
 #   │   ├── queued/interactive/
 #   │   ├── active/
-#   │   ├── review/
-#   │   ├── archived/
+#   │   ├── completed/
 #   │   └── logs/
 #   └── daemon.log
 

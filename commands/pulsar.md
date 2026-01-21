@@ -522,12 +522,11 @@ They touch different concerns and can run simultaneously.
 ### Step 7: Finalize
 
 Update board.json:
-- status: "review" (auto) or keep "active" (manual)
+- status: "completed"
 - completedAt: timestamp
 
 Move plan:
-- Auto: `active/` → `review/`
-- Manual: Keep in `active/`
+- `active/` → `completed/`
 
 Add execution log:
 ```markdown
@@ -564,26 +563,14 @@ Add execution log:
 
 ### Step 8: Notify User
 
-**Auto mode**:
 ```
 Plan {id} executed.
 - Execution: 2 rounds, 7 agents total
 - Quality Gates: 2/2 passed (after each round)
 - Tests: All passing
 - Dead Code: Cleaned
-- Status: In review
-- Next: /archive {id} when done
-```
-
-**Manual mode**:
-```
-Plan {id} executed.
-- Execution: 2 rounds, 7 agents total
-- Quality Gates: 2/2 passed (after each round)
-- Tests: All passing
-- Dead Code: Cleaned
-- Status: Active
-- Next: Review, then /archive
+- Status: Completed
+- Location: ~/comms/plans/{project}/completed/{id}.md
 ```
 
 ## Parallelism Decision Guide
@@ -753,7 +740,7 @@ TaskOutput: task_id={Bash #1 id}
 TaskOutput: task_id={Bash #2 id}
 
 Step 6: Finalize
-- Move plan to ~/comms/plans/my-project/review/
+- Move plan to ~/comms/plans/my-project/completed/
 - Update board.json
 - Notify user
 ```

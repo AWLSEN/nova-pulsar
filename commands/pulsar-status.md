@@ -94,9 +94,8 @@ SUMMARY
 Plan {plan-id} not found in active plans.
 
 Check:
-  - ~/comms/plans/{project}/queued/   (queued plans)
-  - ~/comms/plans/{project}/archived/ (archived plans)
-  - ~/comms/plans/{project}/review/   (in review)
+  - ~/comms/plans/{project}/queued/     (queued plans)
+  - ~/comms/plans/{project}/completed/  (completed plans)
 ```
 
 **Plan completed:**
@@ -108,7 +107,7 @@ Check:
 ╰─────────────────────────────────────────────────────────────╯
 
 All 3 phases completed successfully.
-Run /archive plan-20260117-1500 to archive this plan.
+Location: ~/comms/plans/{project}/completed/plan-20260117-1500.md
 ```
 
 **Stalled phase detected:**
@@ -170,4 +169,3 @@ done
 - `/pulse` - Quick overview of all active executions
 - `/pulsar` - Start plan execution
 - `/nova` - Create a new plan
-- `/archive` - Archive a completed plan

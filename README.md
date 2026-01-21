@@ -23,8 +23,7 @@ Plans are stored globally but namespaced by project:
 │   │   ├── background/       # Plans for daemon execution
 │   │   └── interactive/      # Plans for /pulsar execution
 │   ├── active/               # Currently executing plans
-│   ├── review/               # Completed, pending review
-│   ├── archived/             # Archived plans
+│   ├── completed/            # Completed plans
 │   ├── logs/                 # Execution logs
 │   └── config.json           # Project config
 └── daemon.log                # Global daemon log
@@ -123,11 +122,9 @@ Nova will ask about execution mode:
 - **Interactive** (recommended): You run `/pulsar` when you're ready to execute
 - **Background**: The starry-daemon watches the background queue and executes plans automatically - perfect for "fire and forget" workflows
 
-### 3. Archive when finished
+### 3. Check completed plans
 
-```
-/archive plan-20260111-1530
-```
+Completed plans are automatically moved to `~/comms/plans/{project-name}/completed/`
 
 ## Commands
 
@@ -136,7 +133,8 @@ Nova will ask about execution mode:
 | `/nova <description>` | Create a plan for your task |
 | `/pulsar` | Execute the latest plan |
 | `/pulsar <plan-id>` | Execute a specific plan |
-| `/archive <plan-id>` | Archive a completed plan |
+| `/pulsar-status` | View execution status of active plan |
+| `/pulse` | View overview of all active executions |
 
 ## Background Daemon (Optional)
 
@@ -163,6 +161,20 @@ Logs are stored at `~/comms/plans/daemon.log`.
 ## Folder Rename Detection
 
 If you rename your project folder, Starry Night automatically detects this and updates the namespace to match. No manual intervention needed.
+
+## Upgrading from Earlier Versions
+
+If you're upgrading from an earlier version that used `review/` and `archived/` directories:
+
+**Automatic migration**: The plugin automatically migrates your old structure on session start. Plans in `review/` and `archived/` are moved to `completed/`, and `board.json` is updated.
+
+**Manual migration** (optional): To migrate all projects at once:
+```bash
+./scripts/migrate-all-projects.sh --dry-run  # Preview changes
+./scripts/migrate-all-projects.sh            # Apply migration
+```
+
+Your data is preserved during migration - no plans are lost.
 
 ## Enhanced Research with Codex (Optional)
 

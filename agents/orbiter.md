@@ -42,7 +42,7 @@ none
 Read all `.md` files in:
 - `~/comms/plans/queued/auto/` - plans waiting for execution
 - `~/comms/plans/active/` - currently executing (should be empty for you to pick)
-- `~/comms/plans/archived/` - completed plans (for dependency resolution)
+- `~/comms/plans/completed/` - completed plans (for dependency resolution)
 
 ### 2. For Each Queued Plan, Extract:
 
@@ -61,7 +61,7 @@ A plan B depends on plan A if:
 - Plans touch the same files (later plan depends on earlier)
 
 **Check if dependencies are satisfied**:
-- If plan A is in `archived/` → dependency satisfied
+- If plan A is in `completed/` → dependency satisfied
 - If plan A is in `queued/` → plan B must wait
 
 ### 4. Assign Dynamic Priority (1-5)

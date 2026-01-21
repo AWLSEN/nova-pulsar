@@ -75,7 +75,7 @@ cd "$PROJECT_PATH"
 
 # Run Claude in non-interactive mode with Pulsar
 # Using --allowedTools to auto-approve necessary tools
-nohup claude -p "Execute plan $PLAN_ID using /pulsar $PLAN_ID. The plan is located at $PLAN_FILE. Execute all phases, run tests, and move to review when complete." \
+nohup claude -p "Execute plan $PLAN_ID using /pulsar $PLAN_ID. The plan is located at $PLAN_FILE. Execute all phases, run tests, and mark as completed when done." \
     --allowedTools "Read,Write,Edit,Glob,Grep,Bash,Task,TaskOutput,TodoWrite" \
     --output-format text \
     >> "$LOG_FILE" 2>&1 &
