@@ -25,28 +25,60 @@ You receive:
 
 ## Workflow
 
-### Step 0: Claim Session Marker (RECOMMENDED FIRST ACTION)
+### Step 0: Initialize Status File (MANDATORY FIRST ACTION)
 
-Pulsar pre-creates a marker file for your phase. Claim it by adding your PID:
+**CRITICAL**: Your FIRST action must be to write your status file directly. This enables real-time progress tracking in the TUI. Do NOT rely on hooks for this.
 
 ```bash
-MARKER="$HOME/comms/plans/{PROJECT}/active/{PLAN_ID}/markers/phase-{PHASE}.json"
-if [[ -f "$MARKER" ]]; then
-    jq --arg pid "$PPID" '.pid = $pid' "$MARKER" > "$MARKER.tmp" && mv "$MARKER.tmp" "$MARKER"
-else
-    # Fallback: Create marker if Pulsar didn't pre-create it
-    echo '{"session_id": "{SESSION}", "project": "{PROJECT}", "plan_id": "{PLAN_ID}", "phase": {PHASE}, "pid": "'$PPID'"}' > "$MARKER"
-fi
+# Set env vars for this phase (hooks check these first)
+export PULSAR_TASK_ID="{SESSION}"
+export PULSAR_PROJECT="{PROJECT}"
+
+# Write initial status file (enables TUI phase circle tracking)
+STATUS_DIR="$HOME/comms/plans/{PROJECT}/active/{PLAN_ID}/status"
+MARKER_FILE="$HOME/comms/plans/{PROJECT}/active/{PLAN_ID}/markers/phase-{PHASE}.json"
+mkdir -p "$STATUS_DIR"
+
+# Get thread_id from marker
+THREAD_ID=$(jq -r '.thread_id // ""' "$MARKER_FILE" 2>/dev/null || echo "")
+
+# Write initial "running" status
+jq -n \
+    --arg task_id "{SESSION}" \
+    --arg project "{PROJECT}" \
+    --arg plan_id "{PLAN_ID}" \
+    --argjson phase {PHASE} \
+    --arg thread_id "$THREAD_ID" \
+    --arg status "running" \
+    --argjson tool_count 0 \
+    --arg started_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    '{task_id: $task_id, project: $project, plan_id: $plan_id, phase: $phase, thread_id: (if $thread_id == "" then null else $thread_id end), status: $status, tool_count: $tool_count, started_at: $started_at}' \
+    > "$STATUS_DIR/phase-{PHASE}.status"
+
+echo "Status initialized for phase {PHASE}"
 ```
 
-**Concrete example** (for SESSION: phase-2-plan-20260117-1500, PROJECT: starry-night, PHASE: 2):
+**Concrete example** (for SESSION: phase-2-plan-20260117-1500, PROJECT: starry-night, PLAN_ID: plan-20260117-1500, PHASE: 2):
 ```bash
-MARKER="$HOME/comms/plans/starry-night/active/plan-20260117-1500/markers/phase-2.json"
-if [[ -f "$MARKER" ]]; then
-    jq --arg pid "$PPID" '.pid = $pid' "$MARKER" > "$MARKER.tmp" && mv "$MARKER.tmp" "$MARKER"
-else
-    echo '{"session_id": "phase-2-plan-20260117-1500", "project": "starry-night", "plan_id": "plan-20260117-1500", "phase": 2, "pid": "'$PPID'"}' > "$MARKER"
-fi
+export PULSAR_TASK_ID="phase-2-plan-20260117-1500"
+export PULSAR_PROJECT="starry-night"
+
+STATUS_DIR="$HOME/comms/plans/starry-night/active/plan-20260117-1500/status"
+MARKER_FILE="$HOME/comms/plans/starry-night/active/plan-20260117-1500/markers/phase-2.json"
+mkdir -p "$STATUS_DIR"
+THREAD_ID=$(jq -r '.thread_id // ""' "$MARKER_FILE" 2>/dev/null || echo "")
+jq -n \
+    --arg task_id "phase-2-plan-20260117-1500" \
+    --arg project "starry-night" \
+    --arg plan_id "plan-20260117-1500" \
+    --argjson phase 2 \
+    --arg thread_id "$THREAD_ID" \
+    --arg status "running" \
+    --argjson tool_count 0 \
+    --arg started_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    '{task_id: $task_id, project: $project, plan_id: $plan_id, phase: $phase, thread_id: (if $thread_id == "" then null else $thread_id end), status: $status, tool_count: $tool_count, started_at: $started_at}' \
+    > "$STATUS_DIR/phase-2.status"
+echo "Status initialized for phase 2"
 ```
 
 **Why this matters**: Status tracking hooks use this marker to identify your session. If you skip this step, hooks will self-heal by claiming the unclaimed marker on the first tool use - but claiming it yourself is faster and more reliable.
