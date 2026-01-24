@@ -132,6 +132,15 @@ LAST_FILE="${LAST_FILE:-}"
 # Read existing status file or initialize
 if [[ -f "$STATUS_FILE" ]]; then
     CURRENT_STATUS=$(cat "$STATUS_FILE" 2>/dev/null || echo "{}")
+    CURRENT_STATUS_VALUE=$(echo "$CURRENT_STATUS" | jq -r '.status // "running"' 2>/dev/null || echo "running")
+
+    # If phase is already completed, don't overwrite with "running"
+    # This prevents Pulsar's subsequent tool calls from reverting completion status
+    if [[ "$CURRENT_STATUS_VALUE" == "completed" ]]; then
+        echo '{}'
+        exit 0
+    fi
+
     TOOL_COUNT=$(echo "$CURRENT_STATUS" | jq -r '.tool_count // 0' 2>/dev/null || echo "0")
     STARTED_AT=$(echo "$CURRENT_STATUS" | jq -r '.started_at // ""' 2>/dev/null || echo "")
     # If started_at is empty, initialize it
