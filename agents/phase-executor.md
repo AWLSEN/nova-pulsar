@@ -83,26 +83,56 @@ Co-Authored-By: Pulsar <noreply@anthropic.com>"
 
 ### Step 5: Mark Completed
 
-Before returning your report, mark this phase as completed in the status file:
+Before returning your report, mark this phase as completed. **CREATE the status file if it doesn't exist** (hooks may not have created it due to parallel execution):
 
 ```bash
-STATUS_FILE="$HOME/comms/plans/{PROJECT}/active/{PLAN_ID}/status/phase-{PHASE}.status"
-if [[ -f "$STATUS_FILE" ]]; then
-    jq '.status = "completed" | .completed_at = (now | strftime("%Y-%m-%dT%H:%M:%SZ"))' \
-        "$STATUS_FILE" > "$STATUS_FILE.tmp" && mv "$STATUS_FILE.tmp" "$STATUS_FILE"
-fi
+STATUS_DIR="$HOME/comms/plans/{PROJECT}/active/{PLAN_ID}/status"
+STATUS_FILE="$STATUS_DIR/phase-{PHASE}.status"
+MARKER_FILE="$HOME/comms/plans/{PROJECT}/active/{PLAN_ID}/markers/phase-{PHASE}.json"
+mkdir -p "$STATUS_DIR"
+
+# Get thread_id from marker
+THREAD_ID=$(jq -r '.thread_id // ""' "$MARKER_FILE" 2>/dev/null || echo "")
+
+# Create or update status file with completed status
+jq -n \
+    --arg task_id "{SESSION}" \
+    --arg project "{PROJECT}" \
+    --arg plan_id "{PLAN_ID}" \
+    --argjson phase {PHASE} \
+    --arg thread_id "$THREAD_ID" \
+    --arg status "completed" \
+    --arg completed_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    '{
+        task_id: $task_id,
+        project: $project,
+        plan_id: $plan_id,
+        phase: $phase,
+        thread_id: (if $thread_id == "" then null else $thread_id end),
+        status: $status,
+        completed_at: $completed_at
+    }' > "$STATUS_FILE"
 ```
 
-**Concrete example** (for PROJECT: my-project, PLAN_ID: plan-20260108-1200, PHASE: 2):
+**Concrete example** (for SESSION: phase-2-plan-20260108-1200, PROJECT: my-project, PLAN_ID: plan-20260108-1200, PHASE: 2):
 ```bash
-STATUS_FILE="$HOME/comms/plans/my-project/active/plan-20260108-1200/status/phase-2.status"
-if [[ -f "$STATUS_FILE" ]]; then
-    jq '.status = "completed" | .completed_at = (now | strftime("%Y-%m-%dT%H:%M:%SZ"))' \
-        "$STATUS_FILE" > "$STATUS_FILE.tmp" && mv "$STATUS_FILE.tmp" "$STATUS_FILE"
-fi
+STATUS_DIR="$HOME/comms/plans/my-project/active/plan-20260108-1200/status"
+STATUS_FILE="$STATUS_DIR/phase-2.status"
+MARKER_FILE="$HOME/comms/plans/my-project/active/plan-20260108-1200/markers/phase-2.json"
+mkdir -p "$STATUS_DIR"
+THREAD_ID=$(jq -r '.thread_id // ""' "$MARKER_FILE" 2>/dev/null || echo "")
+jq -n \
+    --arg task_id "phase-2-plan-20260108-1200" \
+    --arg project "my-project" \
+    --arg plan_id "plan-20260108-1200" \
+    --argjson phase 2 \
+    --arg thread_id "$THREAD_ID" \
+    --arg status "completed" \
+    --arg completed_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    '{task_id: $task_id, project: $project, plan_id: $plan_id, phase: $phase, thread_id: (if $thread_id == "" then null else $thread_id end), status: $status, completed_at: $completed_at}' > "$STATUS_FILE"
 ```
 
-**Why this matters**: This enables Conductor to detect phase completion and broadcast real-time progress (e.g., "3/7 phases complete") to the frontend.
+**Why this matters**: This enables Conductor to detect phase completion and broadcast real-time progress (e.g., "3/7 phases complete") to the frontend. Creating the file directly ensures it works even when parallel agents share the same PID.
 
 ## Output
 
