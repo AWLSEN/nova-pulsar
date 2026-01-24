@@ -82,6 +82,11 @@ if [[ -z "$TASK_ID" ]]; then
     fi
 fi
 
+# Also check CONDUCTOR_THREAD_ID env var as fallback
+if [[ -z "$THREAD_ID" && -n "${CONDUCTOR_THREAD_ID:-}" ]]; then
+    THREAD_ID="$CONDUCTOR_THREAD_ID"
+fi
+
 # If no context found, exit (not a Pulsar sub-agent)
 if [[ -z "$TASK_ID" || -z "$PROJECT_NAME" || -z "$PLAN_ID" || -z "$PHASE_NUM" ]]; then
     echo '{}'

@@ -179,13 +179,15 @@ mkdir -p ~/comms/plans/{project-name}/active/{plan-id}/markers
 
 For EACH phase you're about to spawn, create its marker file FIRST:
 ```bash
-# Extract thread_id from plan metadata (look for "**Thread ID**: xxx" line)
-# The grep pattern matches "- **Thread ID**: value" from the Metadata section
-# Example: "- **Thread ID**: 01JHHXYZ..." extracts "01JHHXYZ..."
-# If not found or value is "null", marker will have thread_id: null
-THREAD_ID=$(grep -E '^\- \*\*Thread ID\*\*:' ~/comms/plans/{project-name}/active/{plan-id}.md | sed 's/.*: //' | tr -d '\n' | xargs)
-if [[ -z "$THREAD_ID" || "$THREAD_ID" == "null" ]]; then
-    THREAD_ID="null"
+# Get thread_id - prefer CONDUCTOR_THREAD_ID env var (set by Conductor), fallback to plan metadata
+if [[ -n "${CONDUCTOR_THREAD_ID:-}" ]]; then
+    THREAD_ID="$CONDUCTOR_THREAD_ID"
+else
+    # Fallback: extract from plan metadata (look for "**Thread ID**: xxx" line)
+    THREAD_ID=$(grep -E '^\- \*\*Thread ID\*\*:' ~/comms/plans/{project-name}/active/{plan-id}.md | sed 's/.*: //' | tr -d '\n' | xargs)
+    if [[ -z "$THREAD_ID" || "$THREAD_ID" == "null" ]]; then
+        THREAD_ID="null"
+    fi
 fi
 
 # For each phase N in this round:
@@ -209,10 +211,12 @@ echo '{
 
 **Example** (before spawning phases 1 and 2):
 ```bash
-# Extract thread_id from plan metadata (handles "- **Thread ID**: value" format)
-THREAD_ID=$(grep -E '^\- \*\*Thread ID\*\*:' ~/comms/plans/my-project/active/plan-20260108-1200.md | sed 's/.*: //' | tr -d '\n' | xargs)
-if [[ -z "$THREAD_ID" || "$THREAD_ID" == "null" ]]; then
-    THREAD_ID="null"
+# Get thread_id - prefer env var, fallback to plan metadata
+if [[ -n "${CONDUCTOR_THREAD_ID:-}" ]]; then
+    THREAD_ID="$CONDUCTOR_THREAD_ID"
+else
+    THREAD_ID=$(grep -E '^\- \*\*Thread ID\*\*:' ~/comms/plans/my-project/active/plan-20260108-1200.md | sed 's/.*: //' | tr -d '\n' | xargs)
+    [[ -z "$THREAD_ID" || "$THREAD_ID" == "null" ]] && THREAD_ID="null"
 fi
 
 # Create markers for phases we're about to spawn
