@@ -93,6 +93,10 @@ STARTED_AT=$(echo "$CURRENT_STATUS" | jq -r '.started_at // ""' 2>/dev/null || e
 LAST_TOOL=$(echo "$CURRENT_STATUS" | jq -r '.last_tool // ""' 2>/dev/null || echo "")
 LAST_FILE=$(echo "$CURRENT_STATUS" | jq -r '.last_file // ""' 2>/dev/null || echo "")
 THREAD_ID=$(echo "$CURRENT_STATUS" | jq -r '.thread_id // ""' 2>/dev/null || echo "")
+# Fallback to env var if thread_id not in status file
+if [[ -z "$THREAD_ID" && -n "${CONDUCTOR_THREAD_ID:-}" ]]; then
+    THREAD_ID="$CONDUCTOR_THREAD_ID"
+fi
 # If started_at is empty, initialize it
 [[ -z "$STARTED_AT" ]] && STARTED_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
