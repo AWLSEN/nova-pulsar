@@ -61,14 +61,10 @@ if [[ -z "$TASK_ID" ]]; then
                     break 2
                 fi
 
-                # Unclaimed marker (pid is null) - claim it!
-                if [[ "$PID_IN_MARKER" == "null" ]]; then
-                    if jq --arg pid "$PPID" '.pid = $pid' "$f" > "$f.tmp" 2>/dev/null; then
-                        mv "$f.tmp" "$f" 2>/dev/null || true
-                        MARKER_FILE="$f"
-                        break 2
-                    fi
-                fi
+                # NOTE: We no longer claim unclaimed markers here.
+                # Only the phase-executor should claim markers.
+                # The hook only matches markers that are already claimed by this PID.
+                # This prevents the orchestrator from stealing markers meant for sub-agents.
             done
         done
     fi
